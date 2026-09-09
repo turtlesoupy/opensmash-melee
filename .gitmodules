@@ -1,0 +1,3 @@
+[submodule "melee"]
+	path = melee
+	url = https://github.com/doldecomp/melee.git

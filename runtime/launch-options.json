@@ -1,0 +1,442 @@
+{
+  "version": 1,
+  "modes": [
+    {
+      "id": 0,
+      "key": "free-for-all",
+      "label": "Free-for-All"
+    },
+    {
+      "id": 1,
+      "key": "vs-menu",
+      "label": "VS Menu"
+    },
+    {
+      "id": 2,
+      "key": "vs-character-select",
+      "label": "VS Character Select"
+    },
+    {
+      "id": 3,
+      "key": "one-player-character-select",
+      "label": "1P Character Select"
+    },
+    {
+      "id": 4,
+      "key": "full-boot",
+      "label": "Full Boot"
+    }
+  ],
+  "stages": [
+    {
+      "id": -1,
+      "label": "Random"
+    },
+    {
+      "id": 2,
+      "label": "Fountain of Dreams"
+    },
+    {
+      "id": 3,
+      "label": "Pok\u00e9mon Stadium"
+    },
+    {
+      "id": 4,
+      "label": "Peach\u2019s Castle"
+    },
+    {
+      "id": 5,
+      "label": "Kongo Jungle"
+    },
+    {
+      "id": 6,
+      "label": "Brinstar"
+    },
+    {
+      "id": 7,
+      "label": "Corneria"
+    },
+    {
+      "id": 8,
+      "label": "Yoshi\u2019s Story"
+    },
+    {
+      "id": 9,
+      "label": "Onett"
+    },
+    {
+      "id": 10,
+      "label": "Mute City"
+    },
+    {
+      "id": 11,
+      "label": "Rainbow Cruise"
+    },
+    {
+      "id": 12,
+      "label": "Jungle Japes"
+    },
+    {
+      "id": 13,
+      "label": "Great Bay"
+    },
+    {
+      "id": 14,
+      "label": "Hyrule Temple"
+    },
+    {
+      "id": 15,
+      "label": "Brinstar Depths"
+    },
+    {
+      "id": 16,
+      "label": "Yoshi\u2019s Island"
+    },
+    {
+      "id": 17,
+      "label": "Green Greens"
+    },
+    {
+      "id": 18,
+      "label": "Fourside"
+    },
+    {
+      "id": 19,
+      "label": "Mushroom Kingdom"
+    },
+    {
+      "id": 20,
+      "label": "Mushroom Kingdom II"
+    },
+    {
+      "id": 22,
+      "label": "Venom"
+    },
+    {
+      "id": 23,
+      "label": "Pok\u00e9 Floats"
+    },
+    {
+      "id": 24,
+      "label": "Big Blue"
+    },
+    {
+      "id": 25,
+      "label": "Icicle Mountain"
+    },
+    {
+      "id": 27,
+      "label": "Flat Zone"
+    },
+    {
+      "id": 28,
+      "label": "Dream Land"
+    },
+    {
+      "id": 29,
+      "label": "Yoshi\u2019s Island 64"
+    },
+    {
+      "id": 30,
+      "label": "Kongo Jungle 64"
+    },
+    {
+      "id": 31,
+      "label": "Battlefield"
+    },
+    {
+      "id": 32,
+      "label": "Final Destination"
+    }
+  ],
+  "fighters": [
+    {
+      "id": 0,
+      "label": "Captain Falcon"
+    },
+    {
+      "id": 1,
+      "label": "Donkey Kong"
+    },
+    {
+      "id": 2,
+      "label": "Fox"
+    },
+    {
+      "id": 3,
+      "label": "Mr. Game & Watch"
+    },
+    {
+      "id": 4,
+      "label": "Kirby"
+    },
+    {
+      "id": 5,
+      "label": "Bowser"
+    },
+    {
+      "id": 6,
+      "label": "Link"
+    },
+    {
+      "id": 7,
+      "label": "Luigi"
+    },
+    {
+      "id": 8,
+      "label": "Mario"
+    },
+    {
+      "id": 9,
+      "label": "Marth"
+    },
+    {
+      "id": 10,
+      "label": "Mewtwo"
+    },
+    {
+      "id": 11,
+      "label": "Ness"
+    },
+    {
+      "id": 12,
+      "label": "Peach"
+    },
+    {
+      "id": 13,
+      "label": "Pikachu"
+    },
+    {
+      "id": 14,
+      "label": "Ice Climbers"
+    },
+    {
+      "id": 15,
+      "label": "Jigglypuff"
+    },
+    {
+      "id": 16,
+      "label": "Samus"
+    },
+    {
+      "id": 17,
+      "label": "Yoshi"
+    },
+    {
+      "id": 18,
+      "label": "Zelda"
+    },
+    {
+      "id": 19,
+      "label": "Sheik"
+    },
+    {
+      "id": 20,
+      "label": "Falco"
+    },
+    {
+      "id": 21,
+      "label": "Young Link"
+    },
+    {
+      "id": 22,
+      "label": "Dr. Mario"
+    },
+    {
+      "id": 23,
+      "label": "Roy"
+    },
+    {
+      "id": 24,
+      "label": "Pichu"
+    },
+    {
+      "id": 25,
+      "label": "Ganondorf"
+    }
+  ],
+  "defaults": {
+    "mode": 0,
+    "stage": 31,
+    "level": 5,
+    "stocks": 4,
+    "minutes": 8,
+    "ports": [
+      {
+        "device": "keyboard",
+        "character": "selected"
+      },
+      {
+        "device": "cpu",
+        "character": "vanilla:12"
+      },
+      {
+        "device": "off",
+        "character": "vanilla:2"
+      },
+      {
+        "device": "off",
+        "character": "vanilla:9"
+      }
+    ]
+  },
+  "costumes": {
+    "8": [
+      {
+        "filename": "PlMrNr.dat",
+        "symbol": "PlyMario5K_Share_joint",
+        "materialSymbol": "PlyMario5K_Share_matanim_joint"
+      },
+      {
+        "filename": "PlMrYe.dat",
+        "symbol": "PlyMario5KYe_Share_joint",
+        "materialSymbol": "PlyMario5KYe_Share_matanim_joint"
+      },
+      {
+        "filename": "PlMrBk.dat",
+        "symbol": "PlyMario5KBk_Share_joint",
+        "materialSymbol": "PlyMario5KBk_Share_matanim_joint"
+      },
+      {
+        "filename": "PlMrBu.dat",
+        "symbol": "PlyMario5KBu_Share_joint",
+        "materialSymbol": "PlyMario5KBu_Share_matanim_joint"
+      },
+      {
+        "filename": "PlMrGr.dat",
+        "symbol": "PlyMario5KGr_Share_joint",
+        "materialSymbol": "PlyMario5KGr_Share_matanim_joint"
+      }
+    ],
+    "7": [
+      {
+        "filename": "PlLgNr.dat",
+        "symbol": "PlyLuigi5K_Share_joint",
+        "materialSymbol": "PlyLuigi5K_Share_matanim_joint"
+      },
+      {
+        "filename": "PlLgWh.dat",
+        "symbol": "PlyLuigi5KWh_Share_joint",
+        "materialSymbol": "PlyLuigi5KWh_Share_matanim_joint"
+      },
+      {
+        "filename": "PlLgAq.dat",
+        "symbol": "PlyLuigi5KAq_Share_joint",
+        "materialSymbol": "PlyLuigi5KAq_Share_matanim_joint"
+      },
+      {
+        "filename": "PlLgPi.dat",
+        "symbol": "PlyLuigi5KPi_Share_joint",
+        "materialSymbol": "PlyLuigi5KPi_Share_matanim_joint"
+      }
+    ],
+    "0": [
+      {
+        "filename": "PlCaNr.dat",
+        "symbol": "PlyCaptain5K_Share_joint",
+        "materialSymbol": "NULL"
+      },
+      {
+        "filename": "PlCaGy.dat",
+        "symbol": "PlyCaptain5KGy_Share_joint",
+        "materialSymbol": "NULL"
+      },
+      {
+        "filename": "PlCaRe.dat",
+        "symbol": "PlyCaptain5KRe_Share_joint",
+        "materialSymbol": "NULL"
+      },
+      {
+        "filename": "PlCaWh.dat",
+        "symbol": "PlyCaptain5KWh_Share_joint",
+        "materialSymbol": "NULL"
+      },
+      {
+        "filename": "PlCaGr.dat",
+        "symbol": "PlyCaptain5KGr_Share_joint",
+        "materialSymbol": "NULL"
+      },
+      {
+        "filename": "PlCaBu.dat",
+        "symbol": "PlyCaptain5KBu_Share_joint",
+        "materialSymbol": "NULL"
+      }
+    ],
+    "2": [
+      {
+        "filename": "PlFxNr.dat",
+        "symbol": "PlyFox5K_Share_joint",
+        "materialSymbol": "PlyFox5K_Share_matanim_joint"
+      },
+      {
+        "filename": "PlFxOr.dat",
+        "symbol": "PlyFox5KOr_Share_joint",
+        "materialSymbol": "PlyFox5KOr_Share_matanim_joint"
+      },
+      {
+        "filename": "PlFxLa.dat",
+        "symbol": "PlyFox5KLa_Share_joint",
+        "materialSymbol": "PlyFox5KLa_Share_matanim_joint"
+      },
+      {
+        "filename": "PlFxGr.dat",
+        "symbol": "PlyFox5KGr_Share_joint",
+        "materialSymbol": "PlyFox5KGr_Share_matanim_joint"
+      }
+    ],
+    "9": [
+      {
+        "filename": "PlMsNr.dat",
+        "symbol": "PlyMars5K_Share_joint",
+        "materialSymbol": "PlyMars5K_Share_matanim_joint"
+      },
+      {
+        "filename": "PlMsRe.dat",
+        "symbol": "PlyMars5KRe_Share_joint",
+        "materialSymbol": "PlyMars5KRe_Share_matanim_joint"
+      },
+      {
+        "filename": "PlMsGr.dat",
+        "symbol": "PlyMars5KGr_Share_joint",
+        "materialSymbol": "PlyMars5KGr_Share_matanim_joint"
+      },
+      {
+        "filename": "PlMsBk.dat",
+        "symbol": "PlyMars5KBk_Share_joint",
+        "materialSymbol": "PlyMars5KBk_Share_matanim_joint"
+      },
+      {
+        "filename": "PlMsWh.dat",
+        "symbol": "PlyMars5KWh_Share_joint",
+        "materialSymbol": "PlyMars5KWh_Share_matanim_joint"
+      }
+    ],
+    "6": [
+      {
+        "filename": "PlLkNr.dat",
+        "symbol": "PlyLink5K_Share_joint",
+        "materialSymbol": "PlyLink5K_Share_matanim_joint"
+      },
+      {
+        "filename": "PlLkRe.dat",
+        "symbol": "PlyLink5KRe_Share_joint",
+        "materialSymbol": "PlyLink5KRe_Share_matanim_joint"
+      },
+      {
+        "filename": "PlLkBu.dat",
+        "symbol": "PlyLink5KBu_Share_joint",
+        "materialSymbol": "PlyLink5KBu_Share_matanim_joint"
+      },
+      {
+        "filename": "PlLkBk.dat",
+        "symbol": "PlyLink5KBk_Share_joint",
+        "materialSymbol": "PlyLink5KBk_Share_matanim_joint"
+      },
+      {
+        "filename": "PlLkWh.dat",
+        "symbol": "PlyLink5KWh_Share_joint",
+        "materialSymbol": "PlyLink5KWh_Share_matanim_joint"
+      }
+    ]
+  }
+}
