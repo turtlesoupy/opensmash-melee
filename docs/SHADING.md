@@ -88,3 +88,62 @@ Regression checks:
 python3 -m unittest discover -s tests -p 'test_*.py'
 node --test tests/*.test.mjs
 ```
+
+## Source / bind / animated surface diagnosis
+
+`tools/validate_surfaces.py` renders four stages under a shared orthographic
+camera: the source GLB T-pose (uniform display scale), fitted bind mesh, geometry
+and normals independently decoded from the actual native DAT, and that decoded
+mesh skinned with captured Melee idle-frame-0 joint matrices. Each stage has
+texture-only, neutral-gray-lit, and textured-lit rows. The CPU light is a
+controlled diagnostic, **not** an emulation of Melee's GX lighting. Both texture
+rows use bilinear sampling. No geometry or normals are smoothed for these views.
+
+First capture the gray material and runtime matrices, using a fresh output path:
+
+```sh
+python3 tools/validate_shading.py \
+  --costume build/characters/alanturing-mario-game-v1/PlMrNr.dat \
+  --case gray --frames 300 --output build/surface-diagnostic
+python3 tools/validate_surfaces.py \
+  --character assets/characters/alanturing-mario-game-v1/rigged.glb \
+  --costume build/characters/alanturing-mario-game-v1/PlMrNr.dat \
+  --profile build/characters/alanturing-mario-game-v1/profile.json \
+  --pose-log build/surface-diagnostic/gray/game.log \
+  --output build/surface-diagnostic/review
+```
+
+The validation-only native mod records the completed display's joint matrices
+once the idle pose has settled. The renderer verifies the held motion/frame and
+every runtime joint's index and parent against the DAT hierarchy. It removes
+root placement/facing for display, blends the archived envelope transforms, and
+inverse-transposes the blended matrix for normals, following HSD's envelope
+path. It checks decoded and pre-export positions/normals under the same pose.
+The native `gray/capture.png` is the separate real-GX lighting reference. Gray
+changes only the custom texture pixels; the validation material and mesh stay
+identical to the current lit costume.
+
+September 9 results for this Mario-host retarget:
+
+- All 61 runtime joints matched. Bind-position error was below `4.77e-7`, bind
+  normal error below `2.98e-8`, and UVs matched exactly. Animated position error
+  was below `4.76e-7` and normal error below `3.68e-8`.
+- The angular forehead, cheek and collar are visible in the **source** neutral
+  gray view. They are not introduced by DAT serialization. This does not rule
+  out improving source normals, but smoothing should be evaluated separately
+  from silhouette/topology and preserve intentional hard edges.
+- The source atlas is 2048×2048; the shipped test costume is 256×256. The fitted
+  and decoded bind meshes have matching geometry/normals, while decoded eyes,
+  moustache and collar lose texture detail. This isolates a texture-resolution
+  loss independent of animation or lighting.
+- Hand orientation, sleeve width, leg length and foot shape change at the bind
+  fitting stage. Source hands already have simple mitten-like geometry. Further
+  hand/foot-fit work should compare bind and animated views rather than assume
+  a renderer bug or expect normal smoothing to repair the silhouette.
+- Hair and shoes respond to directional light in the native gray capture. Their
+  nearly solid dark source colors conceal much of that response when textured.
+
+These checks cover one native costume and one real idle pose, not every action,
+character or the browser's alternate skinning implementation. They are image
+quality checks, not an FPS measurement. The 36 Python tests include gray-mode
+texture independence and a nonuniform blended-transform normal oracle.

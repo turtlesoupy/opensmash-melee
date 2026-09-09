@@ -19,13 +19,21 @@ ORIENTATION=np.array([[0,0,-1],[0,1,0],[1,0,0]],float)
 from opensmash_melee.proportions import source_head_fit
 
 
-def render(mesh,right,up,extent,center,size=480):
+def render(mesh,right,up,extent,center,size=480,mode='texture',light=(.4,.7,.6),texture_filter='nearest'):
     """Orthographic, double-sided textured rasterization with a real Z buffer."""
     right=np.asarray(right,float);up=np.asarray(up,float);forward=np.cross(right,up)
     points=mesh['positions'];xyz=np.column_stack((points@right,points@up,points@forward))
     scale=(size-32)/extent;xy=(xyz[:,:2]-np.asarray(center))*[scale,-scale]+size/2
     rgb=np.full((size,size,3),240,dtype=np.uint8);depth=np.full((size,size),-np.inf)
     texture=np.asarray(mesh['image'].convert('RGB'));th,tw=texture.shape[:2]
+    if mode not in ('texture', 'lit', 'gray', 'normals'):
+        raise ValueError('Unknown surface diagnostic mode')
+    if mode != 'texture':
+        normals=np.asarray(mesh['normals'],float)
+        normals=normals/np.linalg.norm(normals,axis=1)[:,None]
+        light=np.asarray(light,float);light/=np.linalg.norm(light)
+        # Controlled diagnostic light, deliberately not an emulation of GX.
+        brightness=.25+.75*np.maximum(normals@light,0)
     for tri in mesh['triangles']:
         p=xy[tri];lo=np.maximum(np.floor(p.min(axis=0)).astype(int),0);hi=np.minimum(np.ceil(p.max(axis=0)).astype(int),size-1)
         if np.any(lo>hi):continue
@@ -39,7 +47,21 @@ def render(mesh,right,up,extent,center,size=480):
         if not visible.any():continue
         uv=u[...,None]*mesh['uv'][tri[0]]+v[...,None]*mesh['uv'][tri[1]]+w[...,None]*mesh['uv'][tri[2]]
         tx=np.clip((uv[:,:,0]*tw).astype(int),0,tw-1);ty=np.clip((uv[:,:,1]*th).astype(int),0,th-1)
-        rgb[lo[1]:hi[1]+1,lo[0]:hi[0]+1][visible]=texture[ty[visible],tx[visible]];sub[visible]=z[visible]
+        colors=texture[ty,tx].astype(float)
+        if texture_filter=='linear':
+            sx=np.clip(uv[:,:,0]*tw-.5,0,tw-1);sy=np.clip(uv[:,:,1]*th-.5,0,th-1)
+            ix=sx.astype(int);iy=sy.astype(int);fx=(sx-ix)[...,None];fy=(sy-iy)[...,None]
+            jx=np.minimum(ix+1,tw-1);jy=np.minimum(iy+1,th-1)
+            colors=(texture[iy,ix]*(1-fx)+texture[iy,jx]*fx)*(1-fy)+(texture[jy,ix]*(1-fx)+texture[jy,jx]*fx)*fy
+        elif texture_filter!='nearest':raise ValueError('Unknown texture filter')
+        if mode in ('lit','gray'):
+            shade=u*brightness[tri[0]]+v*brightness[tri[1]]+w*brightness[tri[2]]
+            colors=(180 if mode=='gray' else colors)*shade[...,None]
+            if colors.shape[-1]==1:colors=np.repeat(colors,3,axis=-1)
+        elif mode=='normals':
+            n=u[...,None]*normals[tri[0]]+v[...,None]*normals[tri[1]]+w[...,None]*normals[tri[2]]
+            colors=(n+1)*127.5
+        rgb[lo[1]:hi[1]+1,lo[0]:hi[0]+1][visible]=np.clip(colors[visible],0,255).astype(np.uint8);sub[visible]=z[visible]
     return Image.fromarray(rgb)
 
 

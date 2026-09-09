@@ -24,7 +24,7 @@ from opensmash_melee.materials import upgrade_cached_lighting
 from launch_moderngekko import configure_user
 
 
-def material_variant(raw, legacy):
+def material_variant(raw, legacy, gray=False):
     a = Archive(raw)
     symbol = next(k for k in a.roots() if k.endswith('_joint'))
     active = []
@@ -41,6 +41,16 @@ def material_variant(raw, legacy):
     mat = a.ptr(m + 12)
     a.pack('II', mat, 0xffffffff, 0xffffffff)
     a.pack('I', a.ptr(m + 8) + 64, 0x40010)
+    if gray:
+        from PIL import Image
+        from opensmash_melee.gx import rgba8
+        descriptor = a.ptr(a.ptr(m + 8) + 76)
+        width, height, fmt = a.unpack('HHI', descriptor + 4)
+        if fmt != 6:
+            raise ValueError('Gray validation requires exported RGBA8')
+        pixels = rgba8(Image.new('RGBA', (width, height), (180, 180, 180, 255)))
+        start = a.ptr(descriptor)
+        a.data[start:start + len(pixels)] = pixels
     raw = a.serialize()
     return raw if legacy else upgrade_cached_lighting(raw)
 
@@ -48,7 +58,7 @@ def material_variant(raw, legacy):
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--costume', type=Path, required=True)
-    p.add_argument('--case', choices=['mario', 'before', 'after'], required=True)
+    p.add_argument('--case', choices=['mario', 'before', 'after', 'gray'], required=True)
     p.add_argument('--frames', type=int, default=480)
     p.add_argument('--output', type=Path, default=ROOT / 'build/shading-validation')
     args = p.parse_args()
@@ -64,7 +74,7 @@ def main():
     if args.case != 'mario':
         costume = game / 'files/PlMrNr.dat'
         costume.unlink()  # Never write through a hard link to original game data.
-        costume.write_bytes(material_variant(args.costume.read_bytes(), args.case == 'before'))
+        costume.write_bytes(material_variant(args.costume.read_bytes(), args.case == 'before', args.case == 'gray'))
     user = out / 'user'
     configure_user(user, pipe=True)
     config = configparser.ConfigParser();config.optionxform = str

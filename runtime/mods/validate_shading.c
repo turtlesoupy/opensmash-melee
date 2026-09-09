@@ -26,10 +26,27 @@ static void frame(CPUState* s) {
     frames++;
     moderngekko_mod_write(s,0x804d6d58,1,1); /* ifAll_HideHUD */
 }
+static unsigned dump_joint(CPUState* s,unsigned root,int parent,unsigned index) {
+    if(!root)return index;
+    if(index>=512)abort();
+    unsigned current=index++;
+    fprintf(stderr,"[pose-joint] %u %d %08x",current,parent,read32(s,root+0x14));
+    for(unsigned i=0;i<12;i++)fprintf(stderr," %.9g",readf(s,root+0x44+i*4));
+    fputc('\n',stderr);
+    index=dump_joint(s,read32(s,root+0x10),(int)current,index);
+    return dump_joint(s,read32(s,root+8),parent,index);
+}
 static void fighter(CPUState* s) {
     unsigned fp=read32(s,s->gpr[3]+0x2c);
     unsigned port=moderngekko_mod_read(s,fp+0xc,1);
     if(port!=0)return;
+    /* Read the previous completed display's world matrices before this update.
+     * The held pose is stable; this never substitutes synthetic joint poses. */
+    static unsigned dumped;
+    if(!dumped && frames>=240 && read32(s,fp+0x10)==14) {
+        dump_joint(s,read32(s,s->gpr[3]+0x28),-1,0);
+        dumped=1;
+    }
     /* Hold the first idle pose. Melee evaluates the original animation and
      * skinning; only its playback rate is zero in this isolated validation. */
     if(read32(s,fp+0x10)==14) {
