@@ -121,7 +121,8 @@ def fit(character,costume,head_style="source"):
     if head_style == 'source':
         from opensmash_melee.proportions import source_head_fit
         profile=source_head_fit(m,target,profile)
-    return profile
+    from opensmash_melee.surfaces import refine_profile
+    return refine_profile(m,target,profile)
 
 
 if __name__=='__main__':

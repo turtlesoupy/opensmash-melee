@@ -2,8 +2,9 @@
 
 Custom costumes use Melee's textured diffuse lighting (`0x14`) and Mario's
 neutral material colors (`0xb3b3b3ff` ambient and diffuse), with diffuse texture
-replacement (`0x50010`). Their existing
-textures, normal arrays, geometry, head fit and animation are preserved.
+replacement (`0x50010`). The material-only migration preserves textures,
+normal arrays, geometry, head fit and animation. Surface conversion also applies
+the corrections described below.
 Specular is disabled for the single-material costume so skin and clothing do
 not acquire a uniform plastic gloss.
 
@@ -147,3 +148,52 @@ These checks cover one native costume and one real idle pose, not every action,
 character or the browser's alternate skinning implementation. They are image
 quality checks, not an FPS measurement. The 36 Python tests include gray-mode
 texture independence and a nonuniform blended-transform normal oracle.
+
+
+## Applied surface corrections
+
+Surface profile version 1 now ships in the converter, cache updater and local
+native/browser builds. `opensmash_melee/surfaces.py` makes three changes:
+
+- Both exporters prefer a 512×512 atlas (four times the texels of 256×256).
+  Browser conversion falls back to 256 for unusually large costumes that would
+  overflow the existing 2 MiB warm-launch slot. All eight prepared browser
+  characters fit at 512. This adds 768 KiB per 512-pixel texture, no polygons.
+- Hands use a uniform source-shape scale and the forearm's rotation at the wrist,
+  rather than aiming the hand at one target finger joint. Feet use a uniform
+  source-shape scale, upright source orientation and the target ankle anchor,
+  rather than stretching and pitching the shoe toward a toe marker. Torso and
+  head corrections are unchanged.
+- Two bounded neighborhood passes filter authored normals using a 55-degree
+  compatibility threshold. Connected UV duplicate corners share a smoothing
+  group, so filtering cannot create a new seam there. Authored sharp normal
+  splits remain separate. No source positions, UVs, skin weights, triangle count
+  or head geometry are changed by smoothing. Some angular silhouettes remain
+  because this does not subdivide or replace the source topology.
+
+`tools/upgrade_character_surfaces.py IDENTIFIER` rebuilds native and any existing
+browser cache from the hash-pinned source GLB and original costume. It preserves
+old artifacts under `previous-surfaces/`, replaces artifacts atomically one file
+at a time, and writes the versioned profile last so interrupted migrations can
+be retried. The local server invokes it before preparation; the full-project
+native packager invokes it before bundling costumes. The ROM-only source builder
+continues to work without the character converter or NumPy.
+
+Evidence for the accepted correction is in `build/surface-fix/`:
+
+- `native-v3/after/capture.png`: actual GX render of the accepted normals,
+  texture and fitting. Earlier trial captures are retained but were not shipped.
+- `native-comparison/comparison.png`: original Mario, previous surface, corrected
+  surface with the same camera and held idle frame; no image color adjustment.
+- `review/`: source, fitted/decoded bind, and captured idle matrix diagnostics.
+- `cache-checks.json`: all 16 cached core head meshes are byte-for-byte equal in
+  floating-point position arrays before/after; migration is idempotent.
+- `six-targets.json`: Alan's source-head shape gates pass on all six target rigs.
+- Native package signature/hash verification passed for eight characters and
+  five launch modes. All 40 Python and 7 Node tests passed, including sharp-edge,
+  UV seam, terminal-shape, head-preservation and browser-slot regression tests.
+- Browser session `2278cc58-08c6-4748-b3c3-72bb09de0801`, 960×720, human Alan vs
+  CPU Mario on Battlefield: 59.10 FPS/31 seconds and 59.07 FPS/30 seconds, with
+  no audio underruns. Those intervals had 12 and 2 frames over 33 ms. Warm
+  click-to-match was 3.46 seconds. This is bounded two-player combat evidence,
+  not a claim of perfect frame pacing or all-character/four-player parity.

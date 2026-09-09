@@ -59,5 +59,9 @@ class FitTests(unittest.TestCase):
         self.assertGreater(bad['head_fraction_relative_error'],.3)
         self.assertLess(good['head_anisotropy'],1.01)
         self.assertLess(good['head_fraction_relative_error'],.01)
+        from opensmash_melee.proportions import source_head_fit
+        previous_head=source_head_fit(mesh,skeleton,old)['bone_corrections']['Head']
+        np.testing.assert_allclose(current['bone_corrections']['Head'],previous_head,atol=1e-7)
+        changed={'Head','L_Hand','R_Hand','L_Foot','R_Foot','L_ToeBase','R_ToeBase'}
         for bone,matrix in old['bone_corrections'].items():
-            if bone!='Head':np.testing.assert_allclose(current['bone_corrections'][bone],matrix,atol=1e-7)
+            if bone not in changed:np.testing.assert_allclose(current['bone_corrections'][bone],matrix,atol=1e-7)

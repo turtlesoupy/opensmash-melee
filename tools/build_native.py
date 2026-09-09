@@ -144,6 +144,11 @@ def package(output, character_id=None):
             folders.append(ROOT / 'build/characters' / character_id)
         kinds = {slots[0]['filename']:int(k) for k, slots in SCHEMA['costumes'].items()}
         for folder in folders:
+            # Full-project builds can regenerate cached custom surfaces. The
+            # source-only ROM builder has neither character sources nor NumPy.
+            updater = ROOT / 'tools/upgrade_character_surfaces.py'
+            if updater.is_file() and (folder / 'profile.json').is_file():
+                subprocess.run([sys.executable, str(updater), folder.name], check=True)
             candidates = list(folder.glob('Pl*Nr.dat'))
             if len(candidates) != 1 or candidates[0].name not in kinds: continue
             source = candidates[0]; fighter = kinds[source.name]

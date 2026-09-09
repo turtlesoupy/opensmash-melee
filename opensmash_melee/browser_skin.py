@@ -7,6 +7,27 @@ import struct
 import numpy as np
 MAGIC=0x4f53534b
 
+
+def build_costume(original, mesh, skeleton, profile):
+    """Prefer the profile's texture size without overflowing warm-boot slots."""
+    from PIL import Image
+    from .archive import Archive
+    from .gx import replace_costume
+    size=profile.get('texture_size',256)
+    while True:
+        archive=Archive(original)
+        fitted=dict(mesh,image=mesh['image'].resize((size,size),Image.Resampling.LANCZOS))
+        stats=replace_costume(archive,fitted,skeleton,dict(profile,browser_skinning=True))
+        raw=archive.serialize()
+        # Must match runtime/web/local-files.mjs. Keep the existing 256 option
+        # for unusually large source meshes rather than breaking their launch.
+        if len(raw)<=2*1024*1024:
+            stats['texture_size']=size
+            return raw,stats
+        if size<=256:raise ValueError('Browser costume exceeds the 2 MiB warm-boot slot')
+        size//=2
+
+
 def polygons(archive,mesh,skeleton):
     n=len(mesh['positions'])
     if n>65535:raise ValueError('Browser skinning INDEX16 vertex limit exceeded')

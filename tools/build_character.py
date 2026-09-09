@@ -42,7 +42,7 @@ def main():
         profile=fit_target(mesh,target)
         profile.update(symbol=target['symbol'],costume_sha256=digest(costume),
                        source_glb_sha256=digest(imported/'rigged.glb'),
-                       mesh_joint=0,mesh_dobj=0,texture_size=256,
+                       mesh_joint=0,mesh_dobj=0,
                        head_style='source',fit_version=6,
                        status='requires_gameplay_review')
     skeleton=joints(Archive.read(costume),profile['symbol'])

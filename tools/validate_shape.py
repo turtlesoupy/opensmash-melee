@@ -94,7 +94,7 @@ def main():
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('character',type=Path);ap.add_argument('--out',type=Path,required=True);ap.add_argument('--costume',type=Path,default=Path('assets/game/files/PlMrNr.dat'));ap.add_argument('--turntable',action='store_true');ap.add_argument('--legacy-root',type=Path,default=Path('build'));a=ap.parse_args();a.out.mkdir(parents=True,exist_ok=True)
     mesh=GLB(a.character/'rigged.glb').mesh();s=joints(Archive.read(a.costume),'PlyMario5K_Share_joint')
     from tools.fit_mario_profile import fit
-    base=fit(a.character,a.costume,head_style='uniform');candidate=source_head_fit(mesh,s,base)
+    candidate=fit(a.character,a.costume,head_style='source')
     (a.out/'profile.json').write_text(json.dumps(candidate,indent=2)+'\n')
     scale=candidate['fit_scales']['Head']['length'];source=dict(mesh,positions=mesh['positions']@ORIENTATION.T*scale)
     source['positions'][:,1]+=candidate['head_reference']['fitted_body_ground']-mesh['positions'][:,1].min()*scale
@@ -108,10 +108,11 @@ def main():
     sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tests'))
     from test_pipeline import decode_vertices
     from opensmash_melee.gx import replace_costume
-    archive=Archive.read(a.costume);replace_costume(archive,dict(c,image=c['image'].resize((256,256),Image.Resampling.LANCZOS)),s,candidate);raw=archive.serialize();(a.out/'PlMrNr.dat').write_bytes(raw);parsed=Archive(raw)
+    texture_size=candidate.get('texture_size',256)
+    archive=Archive.read(a.costume);replace_costume(archive,dict(c,image=c['image'].resize((texture_size,texture_size),Image.Resampling.LANCZOS)),s,candidate);raw=archive.serialize();(a.out/'PlMrNr.dat').write_bytes(raw);parsed=Archive(raw)
     triangles,_=decode_vertices(parsed,parsed.ptr(s[0]['dobj']+12));verts=[v for t in triangles for v in t]
     exported_texture=decode_texture(parsed,s[0]['dobj'])
-    np.testing.assert_array_equal(np.asarray(exported_texture),np.asarray(c['image'].convert('RGBA').resize((256,256),Image.Resampling.LANCZOS)))
+    np.testing.assert_array_equal(np.asarray(exported_texture),np.asarray(c['image'].convert('RGBA').resize((texture_size,texture_size),Image.Resampling.LANCZOS)))
     decoded=dict(c,image=exported_texture,positions=np.array([v[0] for v in verts]),uv=np.array([v[2] for v in verts]),triangles=np.arange(len(verts)).reshape(-1,3))
     models.append(('Exported DAT / independent decode',decoded))
     views=[('Front',[1,0,0],[0,1,0]),('Side',[0,0,-1],[0,1,0]),('Top',[1,0,0],[0,0,-1])]

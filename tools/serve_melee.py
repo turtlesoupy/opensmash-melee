@@ -174,6 +174,8 @@ class Handler(BaseHTTPRequestHandler):
                 (output / 'build.log').write_text(result.stdout)
                 if result.returncode:
                     return self.json({'error': 'This character needs a retarget correction before it can enter combat.'}, 422)
+            from tools.upgrade_character_surfaces import upgrade
+            upgrade(ident)
         host_skin = parse_qs(urlsplit(self.path).query).get('skin') == ['host']
         if host_skin:
             with LOCK:

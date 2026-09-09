@@ -97,4 +97,6 @@ def fit(mesh,target):
             segment([side+'_Foot',side+'_ToeBase'],foot,side+'_Foot','__'+side+'_shoe',toe)
         else:segment([side+'_Foot',side+'_ToeBase'],foot,side+'_Foot',side+'_ToeBase',toe,body_scale)
     if set(mesh['names'])-set(mapping):raise ValueError('Unsupported source joints')
-    return source_head_fit(mesh,skeleton,dict(joint_map=mapping,bone_corrections=corrections,fit_scales=scales,bone_scale=1,base_fighter=target['slug']))
+    from .surfaces import refine_profile
+    profile=source_head_fit(mesh,skeleton,dict(joint_map=mapping,bone_corrections=corrections,fit_scales=scales,bone_scale=1,base_fighter=target['slug']))
+    return refine_profile(mesh,skeleton,profile)

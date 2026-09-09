@@ -31,7 +31,7 @@ def render(root, before_caption='Alan Turing · unlit material'):
         # Exactly the same crop and scale in every column. No color adjustment.
         image = image.crop((300, 0, 1060, 1056)).resize((520, 722), Image.Resampling.LANCZOS)
         sheet.paste(image, (x, 90))
-    draw.text((28, 836), 'Actual game renders  ·  Battlefield lighting  ·  Same camera and idle frame  ·  Mesh and textures unchanged', fill='#c8cbd0', font=small)
+    draw.text((28, 836), 'Actual game renders  ·  Battlefield lighting  ·  Same camera and idle frame  ·  No image color adjustments', fill='#c8cbd0', font=small)
     output = root / 'comparison.png';sheet.save(output)
     (root / 'comparison.json').write_text(json.dumps(dict(cases=[x[0] for x in cases],
         animationFrameBits=pose_frames[0], matchingPose=True, crop=[300,0,1060,1056],
