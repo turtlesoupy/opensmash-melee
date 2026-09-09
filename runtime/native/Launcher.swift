@@ -8,17 +8,27 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var schema:LaunchSchema!, settings:LaunchSettings!, root:URL?, game:Process?, bridge:ControllerBridge?
     let deviceKeys=["keyboard","gamepad0","gamepad1","gamepad2","gamepad3","cpu","off"]
     init(_ build:Build){self.build=build}
+    // A light presentation pass over the existing controls and launch flow.
+    let accent=NSColor(calibratedRed:0.96,green:0.67,blue:0.35,alpha:1)
+    func card(_ x:CGFloat,_ y:CGFloat,_ width:CGFloat,_ height:CGFloat) {
+        let view=NSView(frame:NSRect(x:x,y:y,width:width,height:height))
+        view.wantsLayer=true;view.layer?.cornerRadius=12
+        view.layer?.backgroundColor=NSColor(calibratedRed:0.13,green:0.145,blue:0.17,alpha:1).cgColor
+        window.contentView!.addSubview(view)
+    }
     func label(_ text:String,_ x:CGFloat,_ y:CGFloat,_ width:CGFloat=150)->NSTextField {
-        let view=NSTextField(labelWithString:text);view.frame=NSRect(x:x,y:y,width:width,height:22);window.contentView!.addSubview(view);return view
+        let view=NSTextField(labelWithString:text);view.frame=NSRect(x:x,y:y,width:width,height:22)
+        view.font = .systemFont(ofSize:12,weight:.medium);view.textColor = .secondaryLabelColor
+        window.contentView!.addSubview(view);return view
     }
     func popup(_ names:[String],_ x:CGFloat,_ y:CGFloat,_ width:CGFloat)->NSPopUpButton {
-        let view=NSPopUpButton(frame:NSRect(x:x,y:y,width:width,height:28));view.addItems(withTitles:names);window.contentView!.addSubview(view);return view
+        let view=NSPopUpButton(frame:NSRect(x:x,y:y,width:width,height:28));view.addItems(withTitles:names);view.font = .systemFont(ofSize:13);window.contentView!.addSubview(view);return view
     }
     func combo(_ names:[String],_ x:CGFloat,_ y:CGFloat,_ width:CGFloat)->NSComboBox {
-        let view=NSComboBox(frame:NSRect(x:x,y:y,width:width,height:28));view.addItems(withObjectValues:names);view.completes=true;view.numberOfVisibleItems=12;window.contentView!.addSubview(view);return view
+        let view=NSComboBox(frame:NSRect(x:x,y:y,width:width,height:28));view.addItems(withObjectValues:names);view.completes=true;view.numberOfVisibleItems=12;view.font = .systemFont(ofSize:13);window.contentView!.addSubview(view);return view
     }
     func number(_ value:Int,_ x:CGFloat,_ y:CGFloat)->NSTextField {
-        let view=NSTextField(string:String(value));view.frame=NSRect(x:x,y:y,width:80,height:28);window.contentView!.addSubview(view);return view
+        let view=NSTextField(string:String(value));view.frame=NSRect(x:x,y:y,width:80,height:28);view.font = .monospacedDigitSystemFont(ofSize:14,weight:.medium);view.alignment = .center;window.contentView!.addSubview(view);return view
     }
     func windowWillClose(_ notification:Notification){if game?.isRunning != true {NSApp.terminate(nil)}}
     func applicationDidFinishLaunching(_ notification:Notification) {
@@ -30,26 +40,36 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate {
             item.submenu=appMenu;menu.addItem(item);NSApp.mainMenu=menu
             window=NSWindow(contentRect:NSRect(x:0,y:0,width:760,height:620),styleMask:[.titled,.closable],backing:.buffered,defer:false)
             window.delegate=self;window.title="OpenSmash Melee";window.level = .floating;window.center()
-            label("CHOOSE YOUR FIGHTER",24,570,700).font = .boldSystemFont(ofSize:22)
+            window.appearance=NSAppearance(named:.darkAqua)
+            window.backgroundColor=NSColor(calibratedRed:0.085,green:0.095,blue:0.115,alpha:1)
+            window.titlebarAppearsTransparent=true
+            card(12,518,736,90);card(12,376,736,134);card(12,170,736,196);card(12,88,736,42)
+            let heading=label("OpenSmash Melee",26,570,500)
+            heading.font = .systemFont(ofSize:23,weight:.bold);heading.textColor = .labelColor
+            let badge=label("CHOOSE YOUR FIGHTER",520,575,208)
+            badge.font = .systemFont(ofSize:10,weight:.semibold);badge.textColor=accent;badge.alignment = .right
             characterKeys=build.characters.map{$0.slug}+schema.fighters.map{"vanilla:\($0.id)"}
             characterNames=build.characters.map{$0.name}+schema.fighters.map{"\($0.label) (Melee)"}
             chosen=combo(characterNames,24,528,710);chosen.selectItem(at:characterKeys.firstIndex(of:build.selected) ?? 0)
-            _=label("Launch mode",24,492);mode=popup(schema.modes.map{$0.label},24,458,340);mode.selectItem(at:schema.modes.firstIndex{$0.id==settings.mode} ?? 0)
-            _=label("Stage",394,492);stage=popup(schema.stages.map{$0.label},394,458,340);stage.selectItem(at:schema.stages.firstIndex{$0.id==settings.stage} ?? 0)
+            _=label("Launch mode",24,480);mode=popup(schema.modes.map{$0.label},24,450,340);mode.selectItem(at:schema.modes.firstIndex{$0.id==settings.mode} ?? 0)
+            _=label("Stage",394,480);stage=popup(schema.stages.map{$0.label},394,450,340);stage.selectItem(at:schema.stages.firstIndex{$0.id==settings.stage} ?? 0)
             _=label("CPU level (1–9)",24,422);level=number(settings.level,24,390)
             _=label("Stocks (1–99)",210,422);stocks=number(settings.stocks,210,390)
             _=label("Minutes (0 = unlimited)",394,422,250);minutes=number(settings.minutes,394,390)
             for i in 0..<4 {
                 let y=CGFloat(330-i*48)
-                _=label("Player \(i+1)",24,y+3,80)
+                let player=label("Player \(i+1)",26,y+3,80)
+                player.font = .systemFont(ofSize:12,weight:.semibold)
+                player.textColor = i==0 ? accent : .labelColor
                 let device=popup(["Keyboard","Gamepad 1","Gamepad 2","Gamepad 3","Gamepad 4","CPU","Off"],108,y,170)
                 device.selectItem(at:deviceKeys.firstIndex(of:settings.ports[i].device) ?? 6);devices.append(device)
                 let character=combo(["Selected fighter"]+characterNames,294,y,440)
                 character.selectItem(at:settings.ports[i].character=="selected" ? 0 : (characterKeys.firstIndex(of:settings.ports[i].character).map{$0+1} ?? 0));characters.append(character)
             }
-            _=label("Stage and rules prefill VS. Classic uses player 1. Full Boot follows Melee’s original flow.",24,142,720)
-            status=label("Choose your Melee USA v1.02 ROM to play.",24,105,710)
-            play=NSButton(title:"Play Melee",target:self,action:#selector(startGame));play.frame=NSRect(x:548,y:30,width:186,height:48);play.bezelStyle = .rounded;play.keyEquivalent="\r";play.isEnabled=false;window.contentView!.addSubview(play)
+            label("Stage and rules prefill VS. Classic uses player 1. Full Boot follows Melee’s original flow.",24,142,720).font = .systemFont(ofSize:11)
+            status=label("Choose your Melee USA v1.02 ROM to play.",26,98,706)
+            status.font = .systemFont(ofSize:13);status.textColor = .labelColor
+            play=NSButton(title:"Play Melee",target:self,action:#selector(startGame));play.frame=NSRect(x:548,y:30,width:186,height:48);play.bezelStyle = .rounded;play.bezelColor=NSColor(calibratedRed:0.68,green:0.38,blue:0.17,alpha:1);play.contentTintColor = .white;play.controlSize = .large;play.font = .systemFont(ofSize:15,weight:.semibold);play.image=NSImage(systemSymbolName:"play.fill",accessibilityDescription:nil);play.imagePosition = .imageRight;play.keyEquivalent="\r";play.isEnabled=false;window.contentView!.addSubview(play)
             _=label("\(build.characters.count) bundled custom characters · 26 Melee fighters",24,44,510)
             window.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true)
             chooseROM()
