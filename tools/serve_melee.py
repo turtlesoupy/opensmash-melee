@@ -196,7 +196,7 @@ class Handler(BaseHTTPRequestHandler):
                 if metadata.is_file():
                     info = json.loads(metadata.read_text())
                     info.update(output_sha256=hashlib.sha256(lit).hexdigest(),
-                                output_bytes=len(lit), lighting='melee-diffuse-v1')
+                                output_bytes=len(lit), lighting='melee-diffuse-replace-v2')
                     atomic_write(metadata, (json.dumps(info, indent=2) + '\n').encode())
         if color:
             with LOCK:

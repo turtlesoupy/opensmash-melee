@@ -6,10 +6,10 @@ import re
 from PIL import Image, ImageDraw, ImageFont
 
 
-def render(root):
+def render(root, before_caption='Alan Turing · unlit material'):
     cases = [('mario', 'ORIGINAL MARIO', 'Melee material reference'),
-             ('before', 'MARIO RETARGET · BEFORE', 'Alan Turing · unlit material'),
-             ('after', 'MARIO RETARGET · FIXED', 'Alan Turing · Melee lighting')]
+             ('before', 'MARIO RETARGET · BEFORE', before_caption),
+             ('after', 'MARIO RETARGET · UPDATED', 'Alan Turing · Melee lighting')]
     pose_frames = []
     for case, _, _ in cases:
         log = (root / case / 'game.log').read_text()
@@ -41,4 +41,5 @@ def render(root):
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__);p.add_argument('directory', type=Path)
-    render(p.parse_args().directory)
+    p.add_argument('--before-caption', default='Alan Turing · unlit material')
+    args=p.parse_args();render(args.directory,args.before_caption)

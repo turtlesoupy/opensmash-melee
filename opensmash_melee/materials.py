@@ -4,12 +4,13 @@
 # mode & 7, and 5 falls through to the unlit channel instead of lit case 4.
 LIT_TEXTURE_MODE = 0x14
 FIGHTER_MATERIAL_COLOR = 0xb3b3b3ff
+FIGHTER_TEXTURE_FLAGS = 0x50010  # diffuse texture replaces material RGB, as on Mario
 
 
 def upgrade_cached_lighting(raw):
     """Migrate our old exported material without touching geometry or animation.
 
-    Only the exact legacy exporter signature is eligible. Already-lit files
+    Only our exact unlit/first-lit exporter signatures are eligible. Current files
     are returned byte-for-byte, so cached native and browser costumes need no
     expensive retarget/rebuild. Call this only for generated costume caches.
     """
@@ -35,13 +36,15 @@ def upgrade_cached_lighting(raw):
                     raise ValueError('Cyclic DObj list in generated costume')
                 dobjs.add(d)
                 m = a.ptr(d + 8)
-                if a.ptr(d + 12) is not None and m is not None and a.u32(m + 4) == 0x15:
+                if a.ptr(d + 12) is not None and m is not None:
                     mat, tex = a.ptr(m + 12), a.ptr(m + 8)
                     if (mat is not None and tex is not None and a.u32(tex + 64) == 0x40010
-                            and a.unpack('IIIff', mat) == (0xffffffff, 0xffffffff, 0, 1.0, 0.0)):
+                            and (a.u32(m + 4), a.unpack('IIIff', mat)) in (
+                                (0x15, (0xffffffff, 0xffffffff, 0, 1.0, 0.0)),
+                                (0x14, (FIGHTER_MATERIAL_COLOR, FIGHTER_MATERIAL_COLOR, 0, 1.0, 0.0)))):
                         a.pack('I', m + 4, LIT_TEXTURE_MODE)
                         a.pack('II', mat, FIGHTER_MATERIAL_COLOR, FIGHTER_MATERIAL_COLOR)
+                        a.pack('I', tex + 64, FIGHTER_TEXTURE_FLAGS)
                         changed = True
                 d = a.ptr(d + 4)
     return a.serialize() if changed else raw
-

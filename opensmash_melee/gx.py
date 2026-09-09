@@ -2,7 +2,7 @@
 import struct
 import numpy as np
 
-from .materials import LIT_TEXTURE_MODE, FIGHTER_MATERIAL_COLOR
+from .materials import LIT_TEXTURE_MODE, FIGHTER_MATERIAL_COLOR, FIGHTER_TEXTURE_FLAGS
 
 
 def rgba8(image):
@@ -118,7 +118,7 @@ def material(archive, image):
     archive.pack('3f',tex+28,1,1,1)
     archive.pack('II',tex+52,1,1)  # repeat S/T
     archive.pack('BB',tex+60,1,1)
-    archive.pack('IfI',tex+64,0x40010,1.0,1)  # diffuse modulate, linear
+    archive.pack('IfI',tex+64,FIGHTER_TEXTURE_FLAGS,1.0,1)  # diffuse replace, linear
     archive.pointer(tex+76,im)
     mat = archive.alloc(20)
     archive.pack('IIIff',mat,FIGHTER_MATERIAL_COLOR,FIGHTER_MATERIAL_COLOR,0,1.0,0.0)

@@ -40,6 +40,7 @@ def material_variant(raw, legacy):
     a.pack('I', m + 4, 0x15)
     mat = a.ptr(m + 12)
     a.pack('II', mat, 0xffffffff, 0xffffffff)
+    a.pack('I', a.ptr(m + 8) + 64, 0x40010)
     raw = a.serialize()
     return raw if legacy else upgrade_cached_lighting(raw)
 

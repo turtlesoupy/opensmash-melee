@@ -1,7 +1,8 @@
 # Fighter lighting validation
 
 Custom costumes use Melee's textured diffuse lighting (`0x14`) and Mario's
-neutral material colors (`0xb3b3b3ff` ambient and diffuse). Their existing
+neutral material colors (`0xb3b3b3ff` ambient and diffuse), with diffuse texture
+replacement (`0x50010`). Their existing
 textures, normal arrays, geometry, head fit and animation are preserved.
 Specular is disabled for the single-material costume so skin and clothing do
 not acquire a uniform plastic gloss.
@@ -12,7 +13,14 @@ switches on `rendermode & 7`. Only case 4 selects the ambient/directional diffus
 lights; case 5 falls through to the unlit channel. Original Mario's body
 materials use `0x14`. His occasional shiny details use separate materials.
 
-`opensmash_melee/materials.py` migrates only the exact old exporter signature.
+The diffuse texture must also use `TEX_COLORMAP_REPLACE`, as do 54 of Mario's
+textured body draw objects. `TEX_COLORMAP_MODULATE` (`0x40010`) multiplies the
+texture by the material's 179/255 diffuse color before lighting. Leaving that
+operation in the first lighting fix dimmed the retarget by another 30%.
+Replacement removes this extra attenuation while retaining Melee's directional
+and ambient lighting. It does not add a global exposure adjustment or specular.
+
+`opensmash_melee/materials.py` migrates only the exact unlit and first-lit exporter signatures.
 The local asset server migrates previously prepared native/browser caches on
 selection. Native packaging migrates cached source costumes before making
 color-slot variants. Already-correct archives return byte-for-byte unchanged.
@@ -45,7 +53,7 @@ make this an image-quality check, not an FPS benchmark. Use the ordinary local
 browser/native launch for combat and performance validation. Existing CPU-only
 shape previews are unlit and cannot validate this bug.
 
-The September 9 local comparison in `build/shading-comparison/` verified idle
+The initial September 9 local comparison in `build/shading-comparison/` verified idle
 frame 0 in all three captures. The migration changed exactly seven material
 bytes in each of 26 prepared native/browser archives. The rebuilt native app
 passed signature and asset-hash verification for all 39 costume slots across
@@ -54,6 +62,21 @@ Mario on Battlefield) measured 59.97 and 59.55 FPS over 30 and 31 seconds,
 respectively, with zero audio underruns; the second window had two frames over
 33 ms. Warm click-to-match was 1.82 seconds. These samples do not establish
 four-player or all-roster performance parity.
+
+The follow-up in `build/shading-texture-response/` compares original Mario,
+the first lighting fix, and corrected texture replacement, all at idle frame 0
+with identical camera settings. The original and previous captures are reused
+unchanged with their provenance recorded in `reference.json`. Upgrading a
+first-lit costume changes exactly one texture-operation byte. The generated
+mesh's albedo, detailed texture work, and authored normals still differ from
+Mario's artwork; matching the material response does not make those identical.
+
+The follow-up migrated 26 cached costumes by one byte each, and the rebuilt
+native package passed signature and bundled-asset verification. All 34 Python
+and 7 Node tests passed. A fresh local browser combat sample ran at 28.87 FPS
+over 31 seconds with no audio underruns; it failed the 60 FPS target. Other
+Chrome processes were busy during that sample, but this does not establish the
+cause. The earlier 60 FPS result must not be treated as validation of this run.
 
 The change restores the shared lighting response. It does not replace source
 artwork, add detailed Mario-style cloth textures, smooth authored normals, or

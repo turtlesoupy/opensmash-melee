@@ -23,27 +23,44 @@ class MaterialLightingTests(unittest.TestCase):
                 self.assertEqual(a.u32(m + 4) & 7, 4)
                 self.assertTrue(a.u32(m + 4) & 0x10)
                 self.assertEqual(a.unpack('II', a.ptr(m + 12)), (0xb3b3b3ff,) * 2)
+                # Mario's diffuse texture REPLACEs the material RGB. Modulate
+                # multiplies every texture value by 179/255 before lighting.
+                self.assertEqual(a.u32(a.ptr(m + 8) + 64), 0x50010)
                 self.assertEqual(upgrade_cached_lighting(a.serialize()), a.serialize())
 
     def test_migration_only_changes_material_bytes(self):
         for browser in (False, True):
             a, d = self.costume(browser)
             m = a.ptr(d + 8); mat = a.ptr(m + 12)
+            tex = a.ptr(m + 8)
             expected = a.serialize()
             a.pack('I', m + 4, 0x15)
             a.pack('II', mat, 0xffffffff, 0xffffffff)
+            a.pack('I', tex + 64, 0x40010)
             old = a.serialize()
             self.assertNotEqual(old, expected)
             upgraded = upgrade_cached_lighting(old)
             self.assertEqual(upgraded, expected)
             changed = {i for i, (x, y) in enumerate(zip(old, upgraded)) if x != y}
-            self.assertTrue(changed <= set(range(32+m+4, 32+m+8)) | set(range(32+mat, 32+mat+8)))
+            self.assertEqual(len(changed), 8)
+            self.assertTrue(changed <= set(range(32+m+4, 32+m+8)) | set(range(32+mat, 32+mat+8)) | set(range(32+tex+64, 32+tex+68)))
+
+    def test_migrate_first_lighting_fix_without_touching_other_bytes(self):
+        for browser in (False, True):
+            a, d = self.costume(browser)
+            tex = a.ptr(a.ptr(d + 8) + 8)
+            expected = a.serialize()
+            a.pack('I', tex + 64, 0x40010)
+            old = a.serialize()
+            self.assertEqual(upgrade_cached_lighting(old), expected)
+            self.assertEqual(sum(x != y for x, y in zip(old, expected)), 1)
 
     def test_does_not_restyle_unrelated_material(self):
         a, d = self.costume()
         m = a.ptr(d + 8)
         a.pack('I', m + 4, 0x15)
         a.pack('I', a.ptr(m + 12), 0x808080ff)
+        a.pack('I', a.ptr(m + 8) + 64, 0x40010)
         raw = a.serialize()
         self.assertEqual(upgrade_cached_lighting(raw), raw)
 
