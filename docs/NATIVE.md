@@ -131,8 +131,11 @@ This exercises the five modes and, when the bundled samples are available, a
 four-player match with two custom Falcon costumes alongside custom and standard
 Mario. Each lineup starts from the unmodified imported game; different characters
 sharing a moveset receive separate costume slots. The standard slot is reserved
-when a vanilla version is present. In-game menus still show Melee's original
-names and portraits.
+when a vanilla version is present. Results panels use each costume’s short name;
+the winner title and background
+emblem use its full name and imported OpenSmash stencil. Custom winner portraits
+are framed from the fitted head bounds. The original selection menus and stock
+icons still use Melee’s assets.
 
 Keyboard and up to four separately assigned gamepads are supported by the
 launcher. A controller may occupy only one port. Physical gamepad hardware has

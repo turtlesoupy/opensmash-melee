@@ -20,7 +20,7 @@ def upgrade(ident):
         raise ValueError('Invalid character identifier')
     output=ROOT/'build/characters'/ident;profile_path=output/'profile.json'
     old=json.loads(profile_path.read_text())
-    if old.get('surface_version',0)>=SURFACE_VERSION:return False
+    if old.get('surface_version',0)>=SURFACE_VERSION:return upgrade_presentation(ident)
     source=ROOT/'assets/characters'/ident/'rigged.glb'
     if old.get('source_glb_sha256')!=digest(source):raise ValueError('Cached source hash mismatch')
     native=list(output.glob('Pl*Nr.dat'))
@@ -57,7 +57,63 @@ def upgrade(ident):
     for path,raw in replacements.items():
         if path!=profile_path:atomic_write(path,raw)
     atomic_write(profile_path,profile_bytes)
+    upgrade_presentation(ident)
     return True
+
+def upgrade_presentation(ident):
+    from opensmash_melee.presentation import panel, import_stencil, VERSION
+    import hashlib, os
+    character=ROOT/"assets/characters"/ident
+    if not (character/"emblem_stencil.png").exists():
+        library=Path(os.environ.get("OPENSMASH_CHARACTER_ROOT", ROOT.parent/"opensmash/pipeline/play/ui"))
+        # Existing imports predate stencil preservation. Match the source art
+        # hash, never the retarget/base-fighter name.
+        expected=digest(character/"emblem_raw.png")
+        for source in sorted(library.glob("*/emblem_raw.png")):
+            if digest(source)==expected and import_stencil(source.parent,character):
+                manifest_path=character/"manifest.json"
+                manifest=json.loads(manifest_path.read_text())
+                manifest["files"]["emblem_stencil.png"]=digest(character/"emblem_stencil.png")
+                atomic_write(manifest_path,(json.dumps(manifest,indent=2)+"\n").encode())
+                break
+    changed=False
+    output=ROOT/"build/characters"/ident
+    profile_path=output/"profile.json"
+    profile=json.loads(profile_path.read_text())
+    source_hash=hashlib.sha256((str(VERSION)+digest(profile_path)+digest(character/"character.json")+
+        digest(character/("emblem_stencil.png" if (character/"emblem_stencil.png").exists() else "emblem_raw.png"))).encode()).hexdigest()
+    fitted=None
+    for path in list(output.glob("Pl*Nr.dat"))+list((output/"browser").glob("Pl*Nr.dat")):
+        meta=path.with_suffix(".dat.json")
+        stats=json.loads(meta.read_text()) if meta.exists() else {}
+        if stats.get("presentation_source_sha256")==source_hash and stats.get("output_sha256")==digest(path):continue
+        from opensmash_melee.archive import Archive
+        from opensmash_melee.skeleton import joints
+        from opensmash_melee.glb import GLB
+        from opensmash_melee.retarget import conform
+        from opensmash_melee.gx import replace_costume
+        from PIL import Image
+        original=ROOT/"assets/game/files"/path.name
+        if digest(original)!=profile["costume_sha256"] or digest(character/"rigged.glb")!=profile["source_glb_sha256"]:
+            raise ValueError("Presentation rebuild source hash mismatch")
+        archive=Archive.read(original);skeleton=joints(archive,profile["symbol"])
+        if fitted is None:
+            fitted=conform(GLB(character/"rigged.glb").mesh(),skeleton,profile)
+            fitted["image"]=fitted["image"].resize((profile.get("texture_size",512),)*2,Image.Resampling.LANCZOS)
+            fitted["presentation"]=panel(character)
+        if path.parent.name=="browser":
+            from opensmash_melee.browser_skin import build_costume
+            raw,stats=build_costume(original.read_bytes(),fitted,skeleton,profile)
+        else:
+            stats=replace_costume(archive,fitted,skeleton,profile);raw=archive.serialize()
+        atomic_write(path,raw);changed=True
+        stats.update(presentation_version=VERSION,presentation_source_sha256=source_hash,
+                     output_bytes=len(raw),output_sha256=hashlib.sha256(raw).hexdigest(),
+                     source_costume_sha256=digest(original),source_glb_sha256=digest(character/"rigged.glb"),
+                     profile_sha256=digest(profile_path),surface_version=SURFACE_VERSION)
+        atomic_write(meta,(json.dumps(stats,indent=2)+"\n").encode())
+
+    return changed
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('id')

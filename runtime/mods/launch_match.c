@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 static int original_pacing = 0;
 static int launch_mode = 0, cpu_level = 5, routed = 0, destination_ready = 0;
 static unsigned port_config[4] = {8, 12 | 256, 2 | 768, 9 | 768};
@@ -214,7 +215,157 @@ static void combat_frame(CPUState* s) {
         fprintf(stderr, "[opensmash] native combat frame=180\n");
 #endif
 }
+/* Results names are normally an atlas indexed by fighter kind. Read the
+ * custom identity from the loaded costume instead, so shared movesets and
+ * vanilla opponents remain independent. No allocation or combat-frame work. */
+static int presentation_pointer(unsigned p) { return p>=0x80000000 && p<0x817fff00; }
+static unsigned costume_identity(CPUState* s, unsigned joint, unsigned depth) {
+    if(depth>100)return 0;
+    for(unsigned count=0;presentation_pointer(joint) && count<100;count++,joint=read32(s,joint+8)) {
+        unsigned desc=read32(s,joint+0x84);
+        if(presentation_pointer(desc)) {
+            unsigned d=read32(s,desc+16);
+            for(unsigned n=0;presentation_pointer(d) && n<100;n++,d=read32(s,d+4)) {
+                unsigned m=read32(s,d+8);
+                if(presentation_pointer(m) && read32(s,m+24)==0x4f535549 && read32(s,m+28)==5)
+                    return m;
+            }
+        }
+        unsigned found=costume_identity(s,read32(s,joint+0x10),depth+1);
+        if(found)return found;
+    }
+    return 0;
+}
+static void results_identity(CPUState* s) {
+    static unsigned reported[4];
+    unsigned match=read32(s,0x8046DBE8+0x94);
+    for(unsigned port=0;port<4;port++) {
+        unsigned player=0x8046DBE8+0x98+port*0xD8;
+        unsigned fighter_gobj=read32(s,player+8),label=read32(s,player+0x90+5*4);
+        if(!presentation_pointer(fighter_gobj))continue;
+        unsigned identity=costume_identity(s,read32(s,fighter_gobj+0x28),0);
+        if(!identity)continue;
+        unsigned outcome=presentation_pointer(match)?moderngekko_mod_read(s,match+4,1):7;
+        if(port==moderngekko_mod_read(s,0x8046DBE8+6,1) && outcome!=7 && outcome!=8) {
+            unsigned title=read32(s,0x8046DBE8+0x30);
+            unsigned td=presentation_pointer(title)?read32(s,title+0x18):0;
+            td=presentation_pointer(td)?read32(s,td+4):0;
+            unsigned tm=presentation_pointer(td)?read32(s,td+8):0;
+            unsigned tt=presentation_pointer(tm)?read32(s,tm+8):0;
+            if(presentation_pointer(tt) && presentation_pointer(match) &&
+               moderngekko_mod_read(s,match+6,1)==0)
+                moderngekko_mod_write(s,tt+88,read32(s,identity+44),4);
+            unsigned logo=read32(s,0x8046DBE8+0x20);
+            unsigned ld=presentation_pointer(logo)?read32(s,logo+0x18):0;
+            unsigned lp=presentation_pointer(ld)?read32(s,ld+12):0;
+            unsigned geometry=read32(s,identity+40);
+            if(presentation_pointer(lp) && presentation_pointer(geometry)) {
+                for(unsigned offset=8;offset<24;offset+=4)
+                    moderngekko_mod_write(s,lp+offset,read32(s,geometry+offset)&(offset==12?0x3fffffff:0xffffffff),4);
+            }
+        }
+        if(!presentation_pointer(label))continue;
+        unsigned d=read32(s,label+0x18);
+        if(!presentation_pointer(d))continue;
+        unsigned m=read32(s,d+8),p=read32(s,d+12);
+        if(!presentation_pointer(m) || !presentation_pointer(p))continue;
+        unsigned t=read32(s,m+8),image=read32(s,identity+32),geometry=read32(s,identity+36);
+        if(!presentation_pointer(t) || !presentation_pointer(image) || !presentation_pointer(geometry))continue;
+        moderngekko_mod_write(s,t+88,image,4);
+        for(unsigned offset=8;offset<24;offset+=4)
+            moderngekko_mod_write(s,p+offset,read32(s,geometry+offset),4);
+        if(reported[port]!=identity) {
+            reported[port]=identity;
+            fprintf(stderr,"[opensmash] results identity port=%u descriptor=%08x label=%08x\n",port,identity,label);
+        }
+    }
+}
+static float presentation_float(CPUState* s,unsigned p) {
+    unsigned u=read32(s,p);float value;memcpy(&value,&u,4);return value;
+}
+static void presentation_write_float(CPUState* s,unsigned p,float value) {
+    unsigned u;memcpy(&u,&value,4);moderngekko_mod_write(s,p,u,4);
+}
+static unsigned presentation_joint(CPUState* s,unsigned root,unsigned descriptor,unsigned depth) {
+    if(depth>100)return 0;
+    for(unsigned n=0;presentation_pointer(root)&&n<100;n++,root=read32(s,root+8)) {
+        if(read32(s,root+0x84)==descriptor)return root;
+        unsigned child=presentation_joint(s,read32(s,root+0x10),descriptor,depth+1);
+        if(child)return child;
+    }
+    return 0;
+}
+static void results_portrait_camera(CPUState* s,unsigned port) {
+    unsigned match=read32(s,0x8046DBE8+0x94);
+    if(!presentation_pointer(match))return;
+    unsigned standing=match+0x58+port*0xA8;
+    unsigned placement=moderngekko_mod_read(s,standing+5,1);
+    if(moderngekko_mod_read(s,match+6,1)) {
+        unsigned team=moderngekko_mod_read(s,standing+7,1);
+        if(team>=3)return;
+        placement=moderngekko_mod_read(s,match+0x1C+team*0xC+8,1);
+    }
+    /* Loser portraits already use Melee's full-body framing. */
+    if(placement!=0)return;
+    unsigned player=0x8046DBE8+0x98+port*0xD8;
+    unsigned fighter_gobj=read32(s,player+8);
+    if(!presentation_pointer(fighter_gobj))return;
+    unsigned root=read32(s,fighter_gobj+0x28),identity=costume_identity(s,root,0);
+    if(!identity)return;
+    unsigned head=presentation_joint(s,root,read32(s,identity+48),0);
+    if(!head)return;
+    unsigned camera=read32(s,s->gpr[3]+0x28);
+    if(!presentation_pointer(camera))return;
+    unsigned eye=read32(s,camera+0x24),interest=read32(s,camera+0x28);
+    if(!presentation_pointer(eye)||!presentation_pointer(interest))return;
+    float center[3],max_scale=0;
+    for(unsigned row=0;row<3;row++) {
+        center[row]=presentation_float(s,head+0x44+row*16+12);
+        float scale=0;
+        for(unsigned column=0;column<3;column++) {
+            float m=presentation_float(s,head+0x44+row*16+column*4);
+            center[row]+=m*presentation_float(s,identity+52+column*4);scale+=m*m;
+        }
+        if(scale>max_scale)max_scale=scale;
+    }
+    float radius=presentation_float(s,identity+64)*sqrtf(max_scale);
+    float fov=presentation_float(s,camera+0x40),aspect=presentation_float(s,camera+0x44);
+    if(!(radius>.01f && radius<1000 && fov>1 && fov<150 && aspect>.1f))return;
+    /* The portrait copies the central 52 pixels of the 640-wide EFB. Fit the
+     * actual animated custom head within that crop, with shoulder/headroom. */
+    float distance=radius*.6f/tanf(fov*.00872664626f)/aspect*(640.f/52.f);
+    unsigned state=0x8046E3AC;
+    float capture_width=moderngekko_mod_read(s,0x8046E1B0+0x164+port*24+4,2);
+    float capture_height=moderngekko_mod_read(s,0x8046E1B0+0x164+port*24+6,2);
+    if(capture_width<1 || capture_height<1)return;
+    unsigned w1=moderngekko_mod_read(s,state+0x22B4,2),h1=moderngekko_mod_read(s,state+0x22C4,2);
+    float crop_x=moderngekko_mod_read(s,state+0x22A4,2)+320-(w1/4)*2+capture_width*.5f;
+    float crop_y=moderngekko_mod_read(s,state+0x22AC,2)+244-(h1/2)*2+capture_height*.5f;
+    float half_height=distance*tanf(fov*.00872664626f);
+    center[0]-=(crop_x-320)/320*half_height*aspect;
+    center[1]-=(240-crop_y)/240*half_height+radius*.18f;
+    static unsigned reported[4];
+    if(reported[port]!=identity) {
+        reported[port]=identity;
+        fprintf(stderr,"[opensmash] portrait fit port=%u radius=%.2f distance=%.2f fov=%.2f\n",port,radius,distance,fov);
+    }
+    for(unsigned axis=0;axis<3;axis++) {
+        presentation_write_float(s,interest+0xc+axis*4,center[axis]);
+        presentation_write_float(s,eye+0xc+axis*4,center[axis]+(axis==2?distance:0));
+    }
+    moderngekko_mod_write(s,eye+8,(read32(s,eye+8)|2)&~1u,4);
+    moderngekko_mod_write(s,interest+8,(read32(s,interest+8)|2)&~1u,4);
+}
+static void results_portrait0(CPUState* s){results_portrait_camera(s,0);}
+static void results_portrait1(CPUState* s){results_portrait_camera(s,1);}
+static void results_portrait2(CPUState* s){results_portrait_camera(s,2);}
+static void results_portrait3(CPUState* s){results_portrait_camera(s,3);}
 static const ModernGekkoModHook hooks[] = {
+    RECOMP_HOOK(0x80179D3C, results_portrait0),
+    RECOMP_HOOK(0x80179D60, results_portrait1),
+    RECOMP_HOOK(0x80179D84, results_portrait2),
+    RECOMP_HOOK(0x80179DA8, results_portrait3),
+    RECOMP_HOOK_RETURN(0x80179350, results_identity),
     RECOMP_HOOK(0x801A4510, scene_main),
     RECOMP_HOOK(0x801A1C18, title_frame),
     RECOMP_HOOK(0x8022DDA8, menu_enter),

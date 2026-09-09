@@ -166,6 +166,9 @@ def replace_costume(archive, mesh, skeleton, profile):
         pobj,count = polygons(archive,mesh,skeleton)
     archive.pointer(selected+12,pobj)
     archive.pointer(selected+8,material(archive,mesh['image']))
+    if "presentation" in mesh:
+        from .presentation import attach, portrait_fit
+        attach(archive,selected,mesh["presentation"],portrait_fit(mesh,skeleton,profile))
     # Preserve all skeleton flags; enable normals for the custom model owner.
     archive.pack('I',owner['offset']+4,owner['flags'] | 0x80)
     return dict(vertices=len(mesh['positions']),triangles=len(mesh['triangles']),

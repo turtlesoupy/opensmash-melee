@@ -12,6 +12,8 @@ def build(ident):
     original=next(out.glob('Pl*Nr.dat'));filename=original.name
     archive=Archive.read(ROOT/'assets/game/files'/filename);skel=joints(archive,profile['symbol'])
     mesh=GLB(ROOT/'assets/characters'/ident/'rigged.glb').mesh();fitted=conform(mesh,skel,profile)
+    from opensmash_melee.presentation import panel
+    fitted["presentation"] = panel(ROOT/"assets/characters"/ident)
     from opensmash_melee.browser_skin import build_costume
     raw,stats=build_costume(archive.serialize(),fitted,skel,profile)
     target=out/'browser';target.mkdir(exist_ok=True);(target/filename).write_bytes(raw)

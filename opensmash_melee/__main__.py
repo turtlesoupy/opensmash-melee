@@ -59,6 +59,8 @@ def import_character(source, out):
     try:
         for name in required:
             shutil.copy2(source/name,staging/name)
+        from .presentation import import_stencil
+        if import_stencil(source, staging): required.append("emblem_stencil.png")
         manifest = dict(schema=1,character=character,
                         files={name:digest(staging/name) for name in required},
                         mesh=dict(vertices=len(mesh['positions']),triangles=len(mesh['triangles']),
@@ -199,6 +201,8 @@ def main():
             raise ValueError('texture_size must be a power of two from 4 to 1024')
         from PIL import Image
         mesh['image'] = mesh['image'].resize((size,size),Image.Resampling.LANCZOS)
+        from .presentation import panel
+        mesh["presentation"] = panel(character)
         result = replace_costume(archive,mesh,skeleton,profile)
         raw = archive.serialize()
         atomic_write(args.out,raw)
