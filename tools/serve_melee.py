@@ -1,0 +1,215 @@
+"""Private localhost asset/conversion server for the browser Melee runtime."""
+import argparse
+import hashlib
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
+import mimetypes
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+import threading
+import time
+from urllib.parse import unquote, urlsplit, parse_qs
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from opensmash_melee.costume_variant import costume_variant, SCHEMA
+GAME = ROOT / 'assets/game'
+CHARACTERS = Path(os.environ.get('OPENSMASH_CHARACTER_ROOT', ROOT.parent / 'opensmash/pipeline/play/ui')).expanduser().resolve()
+SYS = ROOT / 'build/browser-engine/moderngekko-web/vendor/dolphin/Data/Sys'
+WEB = ROOT / 'runtime/web'
+BUILD = ROOT / 'build/moderngekko-wasm'
+CATALOG = {r['slug']: r for r in json.loads((ROOT / 'web/public/catalog.json').read_text())}
+KINDS = {'mario': (8, 'Mr'), 'luigi': (7, 'Lg'), 'captain-falcon': (0, 'Ca'),
+         'fox': (2, 'Fx'), 'marth': (9, 'Ms'), 'link': (6, 'Lk')}
+LOCK = threading.Lock()
+TRACE_IO = False
+
+
+def descendant(root, relative):
+    path = (root / relative).resolve()
+    if not path.is_relative_to(root.resolve()) or not path.is_file():
+        raise FileNotFoundError(relative)
+    return path
+
+
+class Handler(BaseHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header('Cross-Origin-Resource-Policy', 'same-origin')
+        self.send_header('Cross-Origin-Embedder-Policy', 'require-corp')
+        self.send_header('Cross-Origin-Opener-Policy', 'same-origin')
+        self.send_header('Cache-Control', 'no-store')
+        super().end_headers()
+
+    def json(self, value, status=200):
+        body = json.dumps(value).encode()
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        if self.command != 'HEAD':
+            self.wfile.write(body)
+
+    def file(self, path):
+        size = path.stat().st_size
+        start, end = 0, size - 1
+        header = self.headers.get('Range')
+        if header:
+            match = re.fullmatch(r'bytes=(\d+)-(\d*)', header)
+            if not match:
+                return self.send_error(416)
+            start = int(match[1])
+            end = min(int(match[2]) if match[2] else end, end)
+            if start > end:
+                return self.send_error(416)
+        self.send_response(206 if header else 200)
+        self.send_header('Content-Type', mimetypes.guess_type(str(path))[0] or 'application/octet-stream')
+        self.send_header('Content-Length', str(end - start + 1))
+        self.send_header('Accept-Ranges', 'bytes')
+        if header:
+            self.send_header('Content-Range', f'bytes {start}-{end}/{size}')
+        self.end_headers()
+        if self.command == 'HEAD':
+            return
+        with path.open('rb') as stream:
+            stream.seek(start)
+            remaining = end - start + 1
+            while remaining:
+                chunk = stream.read(min(remaining, 1024 * 1024))
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
+
+    def do_HEAD(self):
+        self.do_GET()
+
+    def do_GET(self):
+        started = time.perf_counter()
+        try:
+            self.get_resource()
+        finally:
+            if TRACE_IO and self.path.startswith(('/api/game/', '/engine/sys/')):
+                entry = {'time': time.time(), 'method': self.command, 'path': self.path,
+                         'durationMs': (time.perf_counter() - started) * 1000}
+                with LOCK, (ROOT / 'build/moderngekko-validation/startup-io.jsonl').open('a') as stream:
+                    stream.write(json.dumps(entry) + '\n')
+
+    def get_resource(self):
+        route = unquote(urlsplit(self.path).path)
+        try:
+            if route == '/api/game':
+                sizes = {str(p.relative_to(GAME)): p.stat().st_size for p in GAME.rglob('*') if p.is_file()}
+                return self.json({'verified': True, 'revision': 'USA 1.02',
+                                  'files': list(sizes), 'sizes': sizes})
+            if route.startswith('/api/game/'):
+                return self.file(descendant(GAME, route[len('/api/game/'):]))
+            if route.startswith('/api/costume/'):
+                slug = route[len('/api/costume/'):]
+                if slug not in CATALOG:
+                    raise FileNotFoundError(slug)
+                fighter, code = KINDS[CATALOG[slug]['target']]
+                ident = 'web-v1-' + hashlib.sha256(slug.encode()).hexdigest()[:16]
+                query = parse_qs(urlsplit(self.path).query)
+                variant = 'browser/' if query.get('skin') == ['host'] else ''
+                color = int(query.get('color', ['0'])[0])
+                slots = SCHEMA['costumes'][str(fighter)]
+                if not 0 <= color < len(slots): raise ValueError('Invalid color')
+                filename = slots[color]['filename']
+                return self.file(descendant(ROOT / 'build/characters', f'{ident}/{variant}{filename}'))
+            if route == '/engine/sys-manifest.json':
+                return self.json([str(p.relative_to(SYS)) for p in SYS.rglob('*') if p.is_file()])
+            if route == '/engine/sys-bundle.bin':
+                return self.file(BUILD / 'sys-bundle.bin')
+            if route.startswith('/engine/sys/'):
+                return self.file(descendant(SYS, route[len('/engine/sys/'):]))
+            if route.startswith('/engine/'):
+                name = route[len('/engine/'):]
+                root = BUILD if name.startswith('opensmash-web') else WEB
+                return self.file(descendant(root, name))
+            self.send_error(404)
+        except (ValueError, FileNotFoundError):
+            self.send_error(404)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+    def do_POST(self):
+        # Only same-origin local UI calls may start a converter process.
+        origin = self.headers.get('Origin', '')
+        if origin and origin not in ('http://127.0.0.1:5174', 'http://localhost:5174'):
+            return self.send_error(403)
+        if self.path == '/api/debug':
+            length = int(self.headers.get('Content-Length', '0'))
+            if not 0 < length < 65536:
+                return self.send_error(400)
+            entry = json.loads(self.rfile.read(length))
+            trace = ROOT / 'build/moderngekko-validation/browser-trace.jsonl'
+            trace.parent.mkdir(parents=True, exist_ok=True)
+            with LOCK, trace.open('a') as stream:
+                stream.write(json.dumps(entry) + '\n')
+            return self.json({'ok': True})
+        slug = unquote(urlsplit(self.path).path).removeprefix('/api/prepare/')
+        if not self.path.startswith('/api/prepare/') or slug not in CATALOG:
+            return self.send_error(404)
+        query = parse_qs(urlsplit(self.path).query)
+        try: color = int(query.get('color', ['0'])[0])
+        except ValueError: return self.send_error(400)
+        row = CATALOG[slug]
+        fighter, code = KINDS[row['target']]
+        slots = SCHEMA['costumes'][str(fighter)]
+        if not 0 <= color < len(slots): return self.send_error(400)
+        ident = 'web-v1-' + hashlib.sha256(slug.encode()).hexdigest()[:16]
+        output = ROOT / 'build/characters' / ident
+        with LOCK:
+            if not (output / f'Pl{code}Nr.dat').is_file():
+                source = CHARACTERS / slug
+                if not (source / 'rigged.glb').is_file():
+                    raise ValueError('Character source is missing. Set --characters to your exported OpenSmash character library.')
+                result = subprocess.run([sys.executable, str(ROOT / 'tools/build_character.py'),
+                                         str(source), '--id', ident, '--target', row['target']],
+                                        cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                output.mkdir(parents=True, exist_ok=True)
+                (output / 'build.log').write_text(result.stdout)
+                if result.returncode:
+                    return self.json({'error': 'This character needs a retarget correction before it can enter combat.'}, 422)
+        host_skin = parse_qs(urlsplit(self.path).query).get('skin') == ['host']
+        if host_skin:
+            with LOCK:
+                if not (output / 'browser' / f'Pl{code}Nr.dat').is_file():
+                    result = subprocess.run([sys.executable, str(ROOT / 'tools/build_browser_skin_costume.py'), ident], cwd=ROOT, capture_output=True, text=True)
+                    if result.returncode:
+                        (output / 'browser-error.log').write_text(result.stdout + result.stderr)
+                        return self.json({'error': 'The browser skinning build failed.'}, 422)
+        filename = slots[color]['filename']
+        if color:
+            with LOCK:
+                folder = output / 'browser' if host_skin else output
+                raw = costume_variant((folder / slots[0]['filename']).read_bytes(), fighter, color)
+                (folder / filename).write_bytes(raw)
+        self.json({'fighter': fighter, 'filename': filename, 'url': f'/api/costume/{slug}?color={color}' + ('&skin=host' if host_skin else '')})
+
+    def log_message(self, fmt, *args):
+        if self.command == 'POST' or (args and str(args[1]) not in ('200', '206')):
+            super().log_message(fmt, *args)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--iso', type=Path, required=True)
+    parser.add_argument('--port', type=int, default=8781)
+    parser.add_argument('--characters', type=Path, default=CHARACTERS, help='Exported character library (one directory per roster slug)')
+    parser.add_argument('--trace-io', action='store_true', help='Record local asset request timings for startup profiling')
+    args = parser.parse_args()
+    TRACE_IO = args.trace_io
+    CHARACTERS = args.characters.expanduser().resolve()
+    # Hash the complete original image before exposing any game assets.
+    with args.iso.open('rb') as stream:
+        actual = hashlib.file_digest(stream, 'sha256').hexdigest()
+    if actual != '0de05981a34156b9cedcef73c73d4244ac05cf6149ab3c9cfed917698819e464':
+        raise SystemExit('Game image does not match the known USA 1.02 hash.')
+    if hashlib.sha256((GAME / 'sys/main.dol').read_bytes()).hexdigest() != 'dc21504513424350bda17a7c65e82371b45112a5dfc1e9f2749a8b7ab0eff646':
+        raise SystemExit('Extracted game executable does not match the runtime.')
+    from pack_browser_sys import pack
+    pack(SYS, BUILD / 'sys-bundle.bin')
+    print(f'Verified USA 1.02. Private asset server: http://127.0.0.1:{args.port}', flush=True)
+    ThreadingHTTPServer(('127.0.0.1', args.port), Handler).serve_forever()
