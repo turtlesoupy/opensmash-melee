@@ -1,0 +1,352 @@
+/* Melee adapters to the vendored Smash.fun presentation, not a second theme. */
+:root {
+  color-scheme: dark;
+  --retro-fire-texture:
+    radial-gradient(ellipse at 50% 100%, #ba2f14b3, transparent 55%),
+    linear-gradient(180deg, #160605, #3a0c08 48%, #080303);
+}
+body {
+  min-width: 320px;
+}
+button,
+a {
+  cursor: pointer;
+}
+button,
+input,
+select {
+  font: inherit;
+}
+.hero-logo-fallback {
+  object-fit: contain;
+}
+.intro-video-frame {
+  scroll-margin-top: 8px;
+}
+.intro-video-rule-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 8;
+  pointer-events: none;
+}
+.arena-surface.melee-roster {
+  height: auto;
+  min-height: 0;
+}
+.melee-roster .replica-grid {
+  position: absolute;
+  inset: 0;
+}
+.replica-rule-layer {
+  z-index: 2;
+  pointer-events: none;
+}
+.melee-roster .replica-cell {
+  content-visibility: auto;
+  contain-intrinsic-size: 90px 86px;
+}
+.melee-roster[data-paused="true"] .replica-action-static-strip {
+  animation-play-state: paused;
+}
+.random-icon {
+  position: absolute;
+  inset: 24% 0 0;
+  display: grid;
+  place-items: center;
+  font:
+    700 60cqh/1 "Kanit",
+    sans-serif;
+  color: #aca89a;
+  opacity: 0.72;
+}
+.replica-cell.is-search:focus-within .replica-caption-layer {
+  visibility: hidden;
+}
+.replica-cell.is-search:focus-within .replica-search-input {
+  color: #fff2d6;
+  caret-color: #fff2d6;
+  pointer-events: auto;
+  font:
+    600 16px/1 "Kanit",
+    sans-serif;
+}
+.roster-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 10px;
+  color: #baa995;
+  font:
+    400 13px/1.5 "Kanit",
+    sans-serif;
+}
+.roster-status .retro-site-link {
+  font-size: 13px;
+}
+.site-dialog {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  background: rgba(5, 3, 3, 0.97);
+  color: #fff2d6;
+  padding: clamp(20px, 5vw, 70px);
+  overflow: auto;
+  font:
+    400 16px/1.6 "Kanit",
+    sans-serif;
+}
+.site-dialog::backdrop {
+  background: #000b;
+}
+.site-dialog-content {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.site-dialog-content > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #695342;
+  padding-bottom: 16px;
+}
+.site-dialog h1 {
+  font:
+    600 clamp(28px, 4vw, 42px)/1 "Kanit",
+    sans-serif;
+}
+.site-dialog p {
+  margin: 20px 0;
+  color: #c8b59d;
+}
+.launch-settings label,
+.moveset-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #d5bea0;
+  font-size: 14px;
+}
+.launch-settings input,
+.launch-settings select,
+.moveset-filter select {
+  background: #0c0704;
+  color: #fff2d6;
+  border: 1px solid #806448;
+  border-radius: 0;
+  padding: 11px;
+  min-width: 0;
+  font-size: 16px;
+}
+.launch-settings input:focus,
+.launch-settings select:focus,
+.moveset-filter select:focus {
+  outline: 2px solid #ffd9a0;
+  outline-offset: 2px;
+}
+.launch-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 30px;
+}
+.launch-rules input {
+  max-width: 140px;
+}
+.launch-ports {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.launch-ports fieldset {
+  display: grid;
+  gap: 14px;
+  border: 2px ridge #77614d;
+  padding: 18px;
+}
+.launch-ports legend {
+  padding: 0 8px;
+  color: #fff2d6;
+  font-size: 18px;
+}
+.controls-list {
+  max-width: 500px;
+}
+.controls-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 9px 0;
+  border-bottom: 1px solid #584432;
+}
+.controls-list dd {
+  color: #eac393;
+}
+.game-overlay,
+.game-panel {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+.game-screen {
+  position: absolute;
+  inset: 0;
+  background: #000;
+}
+.game-screen canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  outline: none;
+}
+.game-panel > header {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #100905c9;
+  color: #fff2d6;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.game-panel:hover > header,
+.game-panel:focus-within > header {
+  opacity: 1;
+}
+.game-panel h2 {
+  font:
+    600 18px/1.2 "Kanit",
+    sans-serif;
+}
+.game-panel header p {
+  font-size: 11px;
+  color: #c8b59d;
+}
+.game-panel header button {
+  background: transparent;
+  border: 0;
+  font-size: 24px;
+  min-width: 36px;
+  min-height: 36px;
+}
+.fps {
+  margin-left: auto;
+  font:
+    500 13px/1 "Kanit",
+    sans-serif;
+  color: #c8daa0;
+  white-space: nowrap;
+}
+.fps[data-slow="true"] {
+  color: #edb879;
+}
+.game-message {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+  padding: 30px;
+  background: #100905df;
+  z-index: 3;
+}
+.game-message[role="status"] {
+  inset: auto 10px 58px;
+  padding: 12px;
+  background: #100905dc;
+  pointer-events: none;
+  font-size: 14px;
+}
+.game-message button {
+  border: 1px solid #806448;
+  padding: 8px 16px;
+}
+.sound-game,
+.confirm-game {
+  position: absolute;
+  bottom: 10px;
+  z-index: 4;
+  padding: 6px 10px;
+  border: 1px solid #806448;
+  background: #100905c9;
+  font:
+    400 12px/1.4 "Kanit",
+    sans-serif;
+  color: #fff2d6;
+}
+.sound-game {
+  left: 10px;
+}
+.confirm-game {
+  right: 10px;
+}
+.game-help {
+  display: none;
+}
+.touch-controls {
+  display: none;
+  position: absolute;
+  bottom: 52px;
+  inset-inline: 10px;
+  z-index: 4;
+  gap: 5px;
+  flex-wrap: wrap;
+  touch-action: none;
+}
+.touch-controls button {
+  padding: 10px;
+  border: 1px solid #806448;
+  background: #100905bd;
+  color: #fff2d6;
+  touch-action: none;
+  user-select: none;
+}
+@media (pointer: coarse) {
+  .touch-controls {
+    display: flex;
+  }
+  .game-panel > header {
+    opacity: 1;
+  }
+  .game-panel header p {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .launch-ports {
+    grid-template-columns: 1fr;
+  }
+  .game-panel h2 {
+    font-size: 14px;
+  }
+  .site-dialog {
+    padding: 20px 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}

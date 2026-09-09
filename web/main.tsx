@@ -1,1 +1,1 @@
-import React from 'react';import {createRoot} from 'react-dom/client';import Home from './app/page';import './app/globals.css';createRoot(document.getElementById('root')!).render(<Home/>);
+import React from 'react';import {createRoot} from 'react-dom/client';import Home from './app/page';import './app/globals.css';import './vendor/opensmash/site-shell.css';import './vendor/opensmash/social.css';import './app/melee-shell.css';createRoot(document.getElementById('root')!).render(<Home/>);

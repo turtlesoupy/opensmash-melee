@@ -1,5 +1,4 @@
 import schema from '../../runtime/launch-options.json';
-// @ts-expect-error Shared worker module is plain JavaScript.
 import {planLaunch} from '../../runtime/web/launch-options.mjs';
 import type {Fighter} from '../app/page';
 export {schema};

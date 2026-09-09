@@ -14,7 +14,7 @@ export default function LaunchSettings({value,onChange,roster}:{value:Settings,o
  const choices=[{id:'selected',label:'Use roster selection'},...schema.fighters.map(f=>({id:'vanilla:'+f.id,label:f.label+' (Melee)'})),...roster.map(f=>({id:f.slug,label:f.name}))];
  const set=(key:string,n:number)=>onChange({...value,[key]:n});
  const port=(index:number,key:string,v:string)=>onChange({...value,ports:value.ports.map((p,i)=>i===index?{...p,[key]:v}:p)});
- return <details className="launch-settings"><summary>Launch settings · {schema.modes.find(m=>m.id===value.mode)?.label}</summary><div className="launch-rules">
+ return <section className="launch-settings" aria-label="Launch settings"><div className="launch-rules">
  <label>Launch mode<select value={value.mode} onChange={e=>set('mode',+e.target.value)}>{schema.modes.map(m=><option key={m.id} value={m.id}>{m.label}</option>)}</select></label>
  <label>Stage<select value={value.stage} onChange={e=>set('stage',+e.target.value)}>{schema.stages.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
  <label>CPU level<input type="number" min="1" max="9" value={value.level} onChange={e=>set('level',+e.target.value)}/></label>
@@ -22,5 +22,5 @@ export default function LaunchSettings({value,onChange,roster}:{value:Settings,o
  <label>Minutes (0 = unlimited)<input type="number" min="0" max="99" value={value.minutes} onChange={e=>set('minutes',+e.target.value)}/></label>
  </div><div className="launch-ports">{value.ports.map((p,i)=><fieldset key={i}><legend>Player {i+1}</legend><label>Controller<select value={p.device} onChange={e=>port(i,'device',e.target.value)}>{['keyboard','gamepad0','gamepad1','gamepad2','gamepad3','cpu','off'].map(d=><option key={d} value={d}>{d==='keyboard'?'Keyboard / touch':d==='cpu'?'CPU':d==='off'?'Off':'Gamepad '+(+d.slice(-1)+1)}</option>)}</select></label><label>Character<CharacterInput value={p.character} onChange={v=>port(i,'character',v)} choices={choices}/></label></fieldset>)}</div>
  <datalist id="launch-characters">{choices.map(c=><option key={c.id} value={c.label}/>)}</datalist>
- <p>“Use roster selection” uses the character you click below. Search a character by name or choose a standard Melee fighter. Stage and rules prefill VS; Classic uses player 1, stocks and difficulty. Full Boot follows the original game flow.</p></details>;
+ <p>“Use roster selection” uses the character you click below. Search a character by name or choose a standard Melee fighter. Stage and rules prefill VS; Classic uses player 1, stocks and difficulty. Full Boot follows the original game flow.</p></section>;
 }

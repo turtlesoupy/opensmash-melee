@@ -18,7 +18,8 @@
       "@/*": [
         "./*"
       ]
-    }
+    },
+    "allowJs": true
   },
   "include": [
     "app",
