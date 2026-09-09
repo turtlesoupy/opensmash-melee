@@ -16,6 +16,8 @@ from urllib.parse import unquote, urlsplit, parse_qs
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from opensmash_melee.costume_variant import costume_variant, SCHEMA
+from opensmash_melee.materials import upgrade_cached_lighting
+from opensmash_melee.__main__ import atomic_write
 GAME = ROOT / 'assets/game'
 CHARACTERS = Path(os.environ.get('OPENSMASH_CHARACTER_ROOT', ROOT.parent / 'opensmash/pipeline/play/ui')).expanduser().resolve()
 SYS = ROOT / 'build/browser-engine/moderngekko-web/vendor/dolphin/Data/Sys'
@@ -181,6 +183,21 @@ class Handler(BaseHTTPRequestHandler):
                         (output / 'browser-error.log').write_text(result.stdout + result.stderr)
                         return self.json({'error': 'The browser skinning build failed.'}, 422)
         filename = slots[color]['filename']
+        # Refresh existing caches too; a material fix must reach previously
+        # selected fighters without forcing another mesh conversion.
+        with LOCK:
+            folder = output / 'browser' if host_skin else output
+            base = folder / slots[0]['filename']
+            old = base.read_bytes()
+            lit = upgrade_cached_lighting(old)
+            if lit != old:
+                atomic_write(base, lit)
+                metadata = base.with_suffix(base.suffix + '.json')
+                if metadata.is_file():
+                    info = json.loads(metadata.read_text())
+                    info.update(output_sha256=hashlib.sha256(lit).hexdigest(),
+                                output_bytes=len(lit), lighting='melee-diffuse-v1')
+                    atomic_write(metadata, (json.dumps(info, indent=2) + '\n').encode())
         if color:
             with LOCK:
                 folder = output / 'browser' if host_skin else output

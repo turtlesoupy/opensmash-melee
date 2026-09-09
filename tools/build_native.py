@@ -134,6 +134,7 @@ def package(output, character_id=None):
         shutil.copy2(ROOT / 'runtime/launch-options.json', resources / 'launch-options.json')
         sys.path.insert(0, str(ROOT))
         from opensmash_melee.costume_variant import costume_variant, SCHEMA
+        from opensmash_melee.materials import upgrade_cached_lighting
         catalog_path = ROOT / 'web/public/catalog.json'
         catalog = json.loads(catalog_path.read_text()) if catalog_path.exists() else []
         characters = []
@@ -146,12 +147,13 @@ def package(output, character_id=None):
             candidates = list(folder.glob('Pl*Nr.dat'))
             if len(candidates) != 1 or candidates[0].name not in kinds: continue
             source = candidates[0]; fighter = kinds[source.name]
+            lit_source = upgrade_cached_lighting(source.read_bytes())
             row = ids.get(folder.name, {'slug':folder.name, 'name':folder.name})
             variants = []
             for color, slot in enumerate(SCHEMA['costumes'][str(fighter)]):
                 name = 'Characters/' + folder.name + '/' + slot['filename']
                 target = resources / name; target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(costume_variant(source.read_bytes(), fighter, color))
+                target.write_bytes(costume_variant(lit_source, fighter, color))
                 variants.append({'filename':slot['filename'], 'path':name, 'sha256':digest(target)})
             characters.append({'slug':row['slug'], 'name':row['name'], 'fighter':fighter, 'costumes':variants})
         info['characters'] = characters

@@ -2,6 +2,8 @@
 import struct
 import numpy as np
 
+from .materials import LIT_TEXTURE_MODE, FIGHTER_MATERIAL_COLOR
+
 
 def rgba8(image):
     pixels = np.asarray(image.convert('RGBA'))
@@ -119,9 +121,9 @@ def material(archive, image):
     archive.pack('IfI',tex+64,0x40010,1.0,1)  # diffuse modulate, linear
     archive.pointer(tex+76,im)
     mat = archive.alloc(20)
-    archive.pack('IIIff',mat,0xffffffff,0xffffffff,0,1.0,0.0)
+    archive.pack('IIIff',mat,FIGHTER_MATERIAL_COLOR,FIGHTER_MATERIAL_COLOR,0,1.0,0.0)
     mobj = archive.alloc(24)
-    archive.pack('I',mobj+4,0x15)  # constant material + diffuse + TEX0
+    archive.pack('I',mobj+4,LIT_TEXTURE_MODE)  # lit diffuse + TEX0, matte finish
     archive.pointer(mobj+8,tex)
     archive.pointer(mobj+12,mat)
     return mobj

@@ -16,7 +16,7 @@ FILES = [
     'runtime/native/Controllers.swift', 'runtime/native/Launcher.swift',
     'runtime/patches/meleepad/bootstrap.patch', 'runtime/patches/native/fixed-window.patch', 'runtime/patches/native/keyboard-events.patch',
     'opensmash_melee/__init__.py', 'opensmash_melee/archive.py',
-    'opensmash_melee/costume_variant.py', 'docs/NATIVE.md',
+    'opensmash_melee/costume_variant.py', 'opensmash_melee/materials.py', 'docs/NATIVE.md',
 ]
 README = '''# OpenSmash Melee native builder
 
