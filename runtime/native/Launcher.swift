@@ -1,0 +1,99 @@
+import AppKit
+
+final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate {
+    let build:Build
+    var window:NSWindow!, status:NSTextField!, play:NSButton!, mode:NSPopUpButton!, stage:NSPopUpButton!
+    var level:NSTextField!, stocks:NSTextField!, minutes:NSTextField!, chosen:NSComboBox!
+    var devices=[NSPopUpButton](), characters=[NSComboBox](), characterKeys=[String](), characterNames=[String]()
+    var schema:LaunchSchema!, settings:LaunchSettings!, root:URL?, game:Process?, bridge:ControllerBridge?
+    let deviceKeys=["keyboard","gamepad0","gamepad1","gamepad2","gamepad3","cpu","off"]
+    init(_ build:Build){self.build=build}
+    func label(_ text:String,_ x:CGFloat,_ y:CGFloat,_ width:CGFloat=150)->NSTextField {
+        let view=NSTextField(labelWithString:text);view.frame=NSRect(x:x,y:y,width:width,height:22);window.contentView!.addSubview(view);return view
+    }
+    func popup(_ names:[String],_ x:CGFloat,_ y:CGFloat,_ width:CGFloat)->NSPopUpButton {
+        let view=NSPopUpButton(frame:NSRect(x:x,y:y,width:width,height:28));view.addItems(withTitles:names);window.contentView!.addSubview(view);return view
+    }
+    func combo(_ names:[String],_ x:CGFloat,_ y:CGFloat,_ width:CGFloat)->NSComboBox {
+        let view=NSComboBox(frame:NSRect(x:x,y:y,width:width,height:28));view.addItems(withObjectValues:names);view.completes=true;view.numberOfVisibleItems=12;window.contentView!.addSubview(view);return view
+    }
+    func number(_ value:Int,_ x:CGFloat,_ y:CGFloat)->NSTextField {
+        let view=NSTextField(string:String(value));view.frame=NSRect(x:x,y:y,width:80,height:28);window.contentView!.addSubview(view);return view
+    }
+    func windowWillClose(_ notification:Notification){if game?.isRunning != true {NSApp.terminate(nil)}}
+    func applicationDidFinishLaunching(_ notification:Notification) {
+        do {
+            schema=try launchSchema();settings=schema.defaults
+            if let data=try? Data(contentsOf:support.appendingPathComponent("launch-settings.json")),let saved=try? JSONDecoder().decode(LaunchSettings.self,from:data),saved.ports.count==4 {settings=saved}
+            let menu=NSMenu(), item=NSMenuItem(), appMenu=NSMenu()
+            appMenu.addItem(withTitle:"Quit OpenSmash Melee",action:#selector(NSApplication.terminate(_:)),keyEquivalent:"q")
+            item.submenu=appMenu;menu.addItem(item);NSApp.mainMenu=menu
+            window=NSWindow(contentRect:NSRect(x:0,y:0,width:760,height:620),styleMask:[.titled,.closable],backing:.buffered,defer:false)
+            window.delegate=self;window.title="OpenSmash Melee";window.level = .floating;window.center()
+            label("CHOOSE YOUR FIGHTER",24,570,700).font = .boldSystemFont(ofSize:22)
+            characterKeys=build.characters.map{$0.slug}+schema.fighters.map{"vanilla:\($0.id)"}
+            characterNames=build.characters.map{$0.name}+schema.fighters.map{"\($0.label) (Melee)"}
+            chosen=combo(characterNames,24,528,710);chosen.selectItem(at:characterKeys.firstIndex(of:build.selected) ?? 0)
+            _=label("Launch mode",24,492);mode=popup(schema.modes.map{$0.label},24,458,340);mode.selectItem(at:schema.modes.firstIndex{$0.id==settings.mode} ?? 0)
+            _=label("Stage",394,492);stage=popup(schema.stages.map{$0.label},394,458,340);stage.selectItem(at:schema.stages.firstIndex{$0.id==settings.stage} ?? 0)
+            _=label("CPU level (1–9)",24,422);level=number(settings.level,24,390)
+            _=label("Stocks (1–99)",210,422);stocks=number(settings.stocks,210,390)
+            _=label("Minutes (0 = unlimited)",394,422,250);minutes=number(settings.minutes,394,390)
+            for i in 0..<4 {
+                let y=CGFloat(330-i*48)
+                _=label("Player \(i+1)",24,y+3,80)
+                let device=popup(["Keyboard","Gamepad 1","Gamepad 2","Gamepad 3","Gamepad 4","CPU","Off"],108,y,170)
+                device.selectItem(at:deviceKeys.firstIndex(of:settings.ports[i].device) ?? 6);devices.append(device)
+                let character=combo(["Selected fighter"]+characterNames,294,y,440)
+                character.selectItem(at:settings.ports[i].character=="selected" ? 0 : (characterKeys.firstIndex(of:settings.ports[i].character).map{$0+1} ?? 0));characters.append(character)
+            }
+            _=label("Stage and rules prefill VS. Classic uses player 1. Full Boot follows Melee’s original flow.",24,142,720)
+            status=label("Choose your Melee USA v1.02 ROM to play.",24,105,710)
+            play=NSButton(title:"Play Melee",target:self,action:#selector(startGame));play.frame=NSRect(x:548,y:30,width:186,height:48);play.bezelStyle = .rounded;play.keyEquivalent="\r";play.isEnabled=false;window.contentView!.addSubview(play)
+            _=label("\(build.characters.count) bundled custom characters · 26 Melee fighters",24,44,510)
+            window.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true)
+            chooseROM()
+        } catch { showError(error) }
+    }
+    func chooseROM() {
+        var rom:URL?
+        if !arguments.contains("--choose-rom"),let path=try? String(contentsOf:support.appendingPathComponent("rom-path.txt"),encoding:.utf8),fm.fileExists(atPath:path){rom=URL(fileURLWithPath:path)}
+        if rom==nil {
+            let picker=NSOpenPanel();picker.title="Choose Melee USA v1.02";picker.message="Select your unmodified ISO or GCM. Its full hash is checked before importing.";picker.allowsMultipleSelection=false;picker.canChooseDirectories=false
+            guard picker.runModal() == .OK else{NSApp.terminate(nil);return};rom=picker.url
+        }
+        guard let rom=rom else{return}
+        DispatchQueue.global(qos:.userInitiated).async {
+            do {
+                let game=try prepare(rom,self.build){message in DispatchQueue.main.async{self.status.stringValue=message}}
+                DispatchQueue.main.async{self.root=game;self.play.isEnabled=true;self.status.stringValue="Ready. Choose your fighter and launch mode."}
+            }catch{DispatchQueue.main.async{self.showError(error)}}
+        }
+    }
+    func key(_ box:NSComboBox,selectedAllowed:Bool) throws -> String {
+        if selectedAllowed && box.stringValue=="Selected fighter" {return "selected"}
+        guard let index=characterNames.firstIndex(of:box.stringValue) else {throw Failure(message:"Choose a character from the search suggestions.")};return characterKeys[index]
+    }
+    @objc func startGame() {
+        guard let root=root,game?.isRunning != true else{return}
+        do {
+            guard let cpu=Int(level.stringValue),let stock=Int(stocks.stringValue),let time=Int(minutes.stringValue) else{throw Failure(message:"Enter whole numbers for CPU level, stocks and minutes.")}
+            var ports=[Port]()
+            for i in 0..<4 {ports.append(Port(device:deviceKeys[devices[i].indexOfSelectedItem],character:try key(characters[i],selectedAllowed:true)))}
+            settings=LaunchSettings(mode:schema.modes[mode.indexOfSelectedItem].id,stage:schema.stages[stage.indexOfSelectedItem].id,level:cpu,stocks:stock,minutes:time,ports:ports)
+            let plan=try launchPlan(settings,selected:try key(chosen,selectedAllowed:false),characters:build.characters,schema:schema)
+            try JSONEncoder().encode(settings).write(to:support.appendingPathComponent("launch-settings.json"),options:.atomic)
+            play.isEnabled=false;status.stringValue="Starting Melee…"
+            DispatchQueue.global(qos:.userInitiated).async {
+                do {
+                    let process=try launch(root,self.build,plan,headless:false)
+                    DispatchQueue.main.async{self.game=process;self.bridge=ControllerBridge(plan.settings,user:support.appendingPathComponent("User"));self.window.orderOut(nil)}
+                    process.waitUntilExit()
+                    DispatchQueue.main.async{self.bridge=nil;self.game=nil;self.play.isEnabled=true;self.window.makeKeyAndOrderFront(nil);self.status.stringValue=process.terminationStatus==0 ? "Ready for another game." : "The game stopped. See game.log in Application Support/OpenSmash Melee."}
+                }catch{DispatchQueue.main.async{self.play.isEnabled=true;self.showError(error)}}
+            }
+        }catch{showError(error)}
+    }
+    func showError(_ error:Error){let alert=NSAlert();alert.messageText="Melee could not start";alert.informativeText=error.localizedDescription;alert.runModal()}
+    func applicationShouldTerminate(_ sender:NSApplication)->NSApplication.TerminateReply {if game?.isRunning==true{game?.terminate()};return .terminateNow}
+}

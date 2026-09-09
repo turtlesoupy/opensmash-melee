@@ -1,0 +1,141 @@
+# Native ROM-first builds
+
+The native script targets **Apple Silicon, macOS 14 or later**. Windows, Linux,
+Intel Macs and mobile native packages are not validated by this build path.
+It uses the pinned MeleePad/ModernGekko native runtime and an ARM64 module
+generated locally from the user's own unmodified Melee USA v1.02 ISO/GCM.
+
+Install Xcode Command Line Tools, Python 3, CMake and Ninja, then run from this
+repository:
+
+```sh
+python3 tools/build_native.py
+```
+
+Alternatively, double-click `tools/build-native-macos.command`. The first source
+build requires network access for pinned dependencies and can take several minutes.
+
+A file picker asks for the ROM **before cloning dependencies or building**.
+Cancellation stops the build. The script checks the full image SHA-256, prepares
+the pinned native engine and game module, and produces:
+
+```text
+build/native/OpenSmash Melee.app
+```
+
+Open the app normally. Its own first-run picker asks for the ROM, verifies it
+again, and imports the game under `~/Library/Application Support/OpenSmash Melee`.
+The source image is never modified. Subsequent launches remember its path and
+verify it before reusing the local extraction. Game settings and saves are
+separate from Dolphin and the browser. The native picker lets you search bundled custom characters or the 26 standard
+Melee fighters and choose the same five launch modes as the local website:
+Free-for-All, VS Menu, VS Character Select, 1P Character Select (Classic), and Full
+Boot. Configure stage/random, CPU level, stocks, minutes, and four controller
+ports. Defaults are a four-stock Battlefield match against a level-5 CPU.
+The game opens in a fixed 960×720 floating panel on the active desktop. Closing
+it returns to the picker. No AeroSpace configuration is changed.
+
+On a fresh virtual memory card, Melee may ask for an initial confirmation: press
+**J (A)**. Move with WASD, attack with J, special with K, jump with Space/I,
+shield with Q/E, and pause with Return. The headless test exercises the initial
+confirmation through its own isolated pipe controller; normal play keeps the
+keyboard configuration and separate saves.
+
+The native picker includes the custom characters already prepared under
+`build/characters/web-v1-*` when you package it. The current local package contains
+eight custom characters covering all six supported movesets. It does not yet
+fetch or convert the entire 1,067-character browser roster on demand. A source-only
+build includes the 26 standard fighters. To include another existing native build:
+
+```sh
+python3 tools/build_native.py --character-id YOUR_EXISTING_CHARACTER_BUILD
+```
+
+That identifier is a directory under `build/characters/` containing the standard
+native `Pl*Nr.dat`, not the browser-only draw layout. It retains the assigned
+Melee moveset. Use the existing `tools/build_character.py` workflow to build a
+new source character first.
+
+## Automation and verification
+
+```sh
+python3 tools/build_native.py --rom '/path/with spaces/melee.iso' --verify-only
+python3 tools/build_native.py --rom /path/to/melee.iso --reuse-build --output 'build/native/My Test.app'
+'build/native/My Test.app/Contents/MacOS/OpenSmashMelee' --verify-rom /path/to/melee.iso
+'build/native/My Test.app/Contents/MacOS/OpenSmashMelee' --smoke-test /path/to/melee.iso --user-dir /tmp/my-native-validation
+python3 tools/verify_native_package.py 'build/native/My Test.app'
+python3 tools/test_native_first_run.py --app 'build/native/My Test.app' --rom /path/to/melee.iso --output build/native-validation-new
+```
+
+`--reuse-build` skips game-module preparation but still builds/checks the native
+app runtime and verifies the ROM and module identity. Existing output bundles
+are never overwritten. `--prepare-rom` imports without launching a game.
+`--smoke-test` uses a headless renderer. Free-for-All passes after 180 combat
+callbacks; the other modes pass after reaching their destination and remaining
+alive for three seconds. Use `--mode 0` through `--mode 4` or `--launch-settings
+/path/settings.json` to choose a case. It does not certify Metal rendering,
+audio, controls or native FPS. These command-line modes open no game window.
+`--choose-rom` forces the app's picker on a later launch.
+
+Import failures are logged in `import.log`; runtime output is in `game.log`
+under the app's support directory (or the supplied `--user-dir`). Wrong hashes
+are rejected rather than guessed from a filename. This path currently accepts
+raw ISO/GCM only, not RVZ, NKit or a modified image.
+
+## Sharing with Discord users
+
+`python3 tools/package_native_sources.py` creates an allowlisted source-only ZIP
+at `build/native/opensmash-melee-native-builder.zip`. It can build the standard
+native game without the rest of this project. Custom source-character conversion
+still uses the full project. The archive contains no ROM, extracted assets,
+generated module or costumes.
+
+Share the source/build scripts. The app is a **private local build**, including
+a game-derived ARM64 module and, if selected, a costume archive. The bundle
+contains no ROM or extracted game filesystem. Each user should build it from
+their own ROM. The app is ad-hoc signed locally, not notarized for public release.
+
+Suggested status text:
+
+> OpenSmash Melee has a local playable browser build and an experimental Apple
+> Silicon native build script. The native script asks for your own unmodified
+> Melee USA v1.02 ROM and builds locally. Windows/Linux and full OpenSmash feature
+> parity are not confirmed yet. No game download is included.
+
+## Local validation (September 9)
+
+The current eight-custom-character package passes signature/module/costume
+integrity checks, same-size wrong-ROM rejection, fresh import, all five headless
+launch destinations, and a four-player custom/vanilla combat check. Native GUI
+validation covered the searchable picker, ROM selection, VS Menu → character
+select → stage select, and four-player custom combat in the floating window.
+
+Evidence: `build/moderngekko-validation/native-launch-final/result.json`,
+`native-launch-final/package-final.json`, and
+`native-first-run-launch-final/result.json`. The tests ran before the package was
+renamed from `OpenSmash Melee Launch Modes v5.app` to `OpenSmash Melee.app`; the
+final path passes package verification with the same signed module.
+
+Four-player native combat is currently CPU-limited (roughly 31–34 FPS in an
+isolated sample). A 1× render-scale test did not solve this, and bounded CPU/GPU
+threading did not sustain 60 FPS. These launch tests do not certify performance
+parity or physical gamepads. See `docs/LAUNCH_MODES.md` in the full project.
+
+## Launch-mode validation
+
+```sh
+python3 tools/test_native_launch_modes.py --app 'build/native/OpenSmash Melee.app' --rom /path/to/melee.iso --output build/native-launch-validation
+```
+
+This exercises the five modes and, when the bundled samples are available, a
+four-player match with two custom Falcon costumes alongside custom and standard
+Mario. Each lineup starts from the unmodified imported game; different characters
+sharing a moveset receive separate costume slots. The standard slot is reserved
+when a vanilla version is present. In-game menus still show Melee's original
+names and portraits.
+
+Keyboard and up to four separately assigned gamepads are supported by the
+launcher. A controller may occupy only one port. Physical gamepad hardware has
+not been tested in this session. Stage/rules seed VS mode; Classic uses P1 and
+maps CPU levels 1–9 to its five difficulty levels. Full Boot preserves the original
+intro/title/menu flow; use the original game menus for its rules and selections.
