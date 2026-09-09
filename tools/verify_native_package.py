@@ -30,11 +30,14 @@ def verify(app):
     for character in build['characters']:
         slots = schema['costumes'][str(character['fighter'])]
         assert len(character['costumes']) == len(slots)
-        for costume, slot in zip(character['costumes'], slots):
-            path = (resources / costume['path']).resolve()
-            assert path.is_relative_to(resources.resolve())
-            assert costume['filename'] == slot['filename']
-            assert digest(path) == costume['sha256']
+        for variants in [character['costumes'], character.get('compactCostumes') or []]:
+            if not variants:continue
+            assert len(variants)==len(slots)
+            for costume, slot in zip(variants, slots):
+                path = (resources / costume['path']).resolve()
+                assert path.is_relative_to(resources.resolve())
+                assert costume['filename'] == slot['filename']
+                assert digest(path) == costume['sha256']
     subprocess.run(['codesign','--verify','--deep','--strict',str(app)],check=True)
     result = {'app':str(app),'moduleSha256':build['moduleSha256'],'character':build['character'],
               'romBundled':False,'architecture':'arm64','signature':'ad-hoc verified',

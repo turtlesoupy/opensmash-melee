@@ -32,6 +32,7 @@ Melee fighters and choose the same five launch modes as the local website:
 Free-for-All, VS Menu, VS Character Select, 1P Character Select (Classic), and Full
 Boot. Configure stage/random, CPU level, stocks, minutes, and four controller
 ports. Defaults are a four-stock Battlefield match against a level-5 CPU.
+The Play button displays preparation/loading progress and stays visible until the game reaches its destination. An early exit displays an error with a button to open the runtime log. `--play` starts the saved setup after ROM verification.
 The game opens in a fixed 960×720 floating panel on the active desktop. Closing
 it returns to the picker. No AeroSpace configuration is changed.
 
@@ -116,7 +117,7 @@ Evidence: `build/moderngekko-validation/native-launch-final/result.json`,
 renamed from `OpenSmash Melee Launch Modes v5.app` to `OpenSmash Melee.app`; the
 final path passes package verification with the same signed module.
 
-Four-player native combat is currently CPU-limited (roughly 31–34 FPS in an
+The earlier native build, before shared skinning, was CPU-limited in four-player combat (roughly 31–34 FPS in an
 isolated sample). A 1× render-scale test did not solve this, and bounded CPU/GPU
 threading did not sustain 60 FPS. These launch tests do not certify performance
 parity or physical gamepads. See `docs/LAUNCH_MODES.md` in the full project.
@@ -138,7 +139,27 @@ are framed from the fitted head bounds. The original selection menus and stock
 icons still use Melee’s assets.
 
 Keyboard and up to four separately assigned gamepads are supported by the
-launcher. A controller may occupy only one port. Physical gamepad hardware has
-not been tested in this session. Stage/rules seed VS mode; Classic uses P1 and
+launcher. A controller may occupy only one port. Physical gamepad input still needs a hands-on check; detecting a connected DualSense alone is not an input validation. Stage/rules seed VS mode; Classic uses P1 and
 maps CPU levels 1–9 to its five difficulty levels. Full Boot preserves the original
 intro/title/menu flow; use the original game menus for its rules and selections.
+
+## Shared native skinning
+
+The native module also uses the same verified matrix-concatenation and scaled-add specializations as the browser. Their generated instruction bodies are hash-checked before transformation.
+
+Native packages prefer each prepared costume's `browser/` single-batch layout
+when available. The native engine uses the same skinning implementation and
+Melee matrix oracle as the browser, through a small native module adapter.
+Lineups with three or more distinct customs use bundled 256px variants to fit Melee’s preload memory; smaller lineups retain their 512px textures. Meshes, proportions, materials, names and emblems are shared. Vanilla costumes and imports without that layout retain the original GX path.
+The launcher keeps its controller bridge active while gameplay is running.
+
+Measure real CPU-versus-CPU combat without capture:
+
+```sh
+python3 tools/benchmark_native.py --character abrahamlincoln --output build/native-fps-new
+```
+
+This uses the already-verified local game import and copies settings into an
+isolated user directory. It saves three 30-second frame-time windows after
+warm-up, with capture explicitly disabled. See `docs/PERFORMANCE.md` for measured
+results and remaining limitations.

@@ -139,12 +139,14 @@ func launch(_ game: URL, _ build: Build, _ plan:LaunchPlan, headless: Bool) thro
                 "--title", "OpenSmash Melee", "--graphics", headless ? "Null" : "Metal",
                 "--audio", headless ? "Null" : "Cubeb", "--mods", resources.appendingPathComponent("Mods").path]
     if headless { args.append("--headless") }
+    var environment=plan.environment
+    if !plan.costumes.isEmpty {environment["OPENSMASH_NATIVE_MODULE"]=mac.appendingPathComponent("game-module.dylib").path}
     return try command(mac.deletingLastPathComponent().appendingPathComponent("Helpers/Melee Engine.app/Contents/MacOS/MeleeRunner"), args, log: support.appendingPathComponent("game.log"),
-        environment: plan.environment)
+        environment: environment)
 }
 func cli(_ build: Build) throws -> Bool {
     if arguments.contains("--help") {
-        print("OpenSmashMelee [--verify-rom ROM | --prepare-rom ROM | --smoke-test ROM] [--user-dir DIRECTORY] [--mode 0..4] [--launch-settings JSON] [--character SLUG]\nOpen the app normally for its ROM picker and native game.")
+        print("OpenSmashMelee [--verify-rom ROM | --prepare-rom ROM | --smoke-test ROM] [--user-dir DIRECTORY] [--mode 0..4] [--launch-settings JSON] [--character SLUG]\nOpen the app normally for its ROM picker and native game. --play starts with saved launch settings after ROM verification.")
         return true
     }
     if let path = option("--verify-rom") { try verify(URL(fileURLWithPath: path), build); print("Verified USA v1.02: " + build.isoSha256); return true }

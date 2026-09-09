@@ -39,5 +39,25 @@ class NativeROMTests(unittest.TestCase):
             self.assertEqual(run.call_count, 1)
 
 
+
+class NativePatchTests(unittest.TestCase):
+    def test_overlapping_series_handles_fresh_partial_and_current_checkouts(self):
+        import difflib
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);patches=root/'runtime/patches/native';patches.mkdir(parents=True)
+            original='first\ncontext\nlast\n';one='first\nfeature one\ncontext\nlast\n';two=one.replace('feature one','feature two')
+            for name,a,b in [('01.patch',original,one),('02.patch',one,two)]:
+                (patches/name).write_text(''.join(difflib.unified_diff(a.splitlines(True),b.splitlines(True),fromfile='a/file.txt',tofile='b/file.txt')))
+            for initial in [original,one,two]:
+                checkout=root/'checkout';checkout.mkdir(exist_ok=True);target=checkout/'file.txt';target.write_text(initial)
+                unrelated=checkout/'user.txt';unrelated.write_text('keep this')
+                with patch.object(build_native,'ROOT',root):
+                    build_native.apply_native_patches(checkout)
+                    self.assertEqual(target.read_text(),two)
+                    before=target.stat().st_mtime_ns
+                    build_native.apply_native_patches(checkout)
+                    self.assertEqual(target.stat().st_mtime_ns,before)
+                self.assertEqual(unrelated.read_text(),'keep this')
+
 if __name__ == '__main__':
     unittest.main()

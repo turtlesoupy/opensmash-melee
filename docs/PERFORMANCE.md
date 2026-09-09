@@ -112,3 +112,36 @@ therefore the final renderer also does **not** receive a sustained-60 pass for
 that run. The earlier six-moveset results remain historical evidence, not a
 certificate for this changed renderer. These failures are retained in
 `launch-modes-browser-performance.json`.
+
+
+## Native play correction (September 9)
+
+The native build now shares the browser's single-batch custom skinning and its
+verified PSMTXConcat / HSD_MtxScaledAdd specializations. It also marks the floating
+game and controller bridge as active work and gives the frame worker an explicit
+interactive scheduling class on macOS. The matrix optimizations passed 12,000
+full-CPU-state and RAM comparisons each; concatenation was 8.25× faster in the
+isolated oracle. Four live native skinning poses matched Melee position matrices
+exactly, with maximum normal-matrix error approximately 0.000012.
+
+A final Lincoln/Falcon-versus-Peach CPU-combat run at 960×720 with Metal and Cubeb,
+with capture disabled, passed three independent 30-second windows after warm-up:
+
+| Window | FPS | p95 ms | p99 ms |
+|---|---:|---:|---:|
+| 1 | 59.939 | 17.221 | 17.771 |
+| 2 | 59.939 | 17.268 | 17.742 |
+| 3 | 59.939 | 17.226 | 17.784 |
+
+Evidence: `build/native-play-review/sustained-math/result.json`, including engine,
+module and costume hashes; the installed app's engine and full-resolution Lincoln
+costume match those exact artifacts. This is a two-player native frame-time pass,
+not an all-character/four-player FPS or audio-underrun certificate. Failed earlier
+runs are retained in `sustained/` and `sustained-active/` in the same review folder.
+
+All five launch modes and a mixed four-player lineup passed the final functional
+checks. The three-custom loading failure also reproduced in the previous app:
+full-resolution costumes exceeded Melee's preload arena. Large lineups now use
+256px variants, while one/two-custom lineups retain 512px. Positions, normals and
+weights are byte-identical across the full/compact variants for all eight customs.
+Four-player sustained performance still needs its own benchmark.

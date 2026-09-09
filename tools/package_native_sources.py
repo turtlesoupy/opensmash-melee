@@ -7,12 +7,13 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 FILES = [
-    'tools/build_native.py', 'tools/build-native-macos.command',
+    'tools/specialize_native_math.py', 'tools/specialize_browser_math.py', 'tools/build_native.py', 'tools/build-native-macos.command',
     'tools/prepare_moderngekko.py', 'tools/verify_native_package.py',
     'tools/test_native_first_run.py', 'tools/test_native_launch_modes.py', 'tests/test_native_build.py',
     'tools/package_native_sources.py',
     'runtime/upstream.json', 'runtime/mods/launch_match.c', 'runtime/native/main.swift',
     'runtime/launch-options.json', 'runtime/native/LaunchOptions.swift',
+    'runtime/patches/native/gameplay-qos.patch', 'runtime/patches/native/playback-activity.patch', 'runtime/native/skin_bridge.cpp', 'runtime/web/skin_runtime.cpp', 'runtime/patches/native/shared-skinning.patch',
     'runtime/native/Controllers.swift', 'runtime/native/Launcher.swift',
     'runtime/patches/meleepad/bootstrap.patch', 'runtime/patches/native/fixed-window.patch', 'runtime/patches/native/keyboard-events.patch',
     'opensmash_melee/__init__.py', 'opensmash_melee/archive.py',

@@ -51,19 +51,68 @@ def run(*args):
     subprocess.run([str(a) for a in args], check=True, cwd=ROOT)
 
 
+def apply_native_patches(runtime):
+    # Patches may build on earlier patches in the same file. Stage the complete
+    # series before changing the checkout, preserving unrelated upstream edits.
+    patches=sorted((ROOT / 'runtime/patches/native').glob('*.patch'))
+    names={line[6:] for patch in patches for line in patch.read_text().splitlines() if line.startswith('+++ b/')}
+    with tempfile.TemporaryDirectory(prefix='opensmash-native-patches-') as directory:
+        stage=Path(directory)
+        for name in names:
+            source=runtime/name;target=stage/name;target.parent.mkdir(parents=True,exist_ok=True)
+            if source.exists():shutil.copy2(source,target)
+        for patch in reversed(patches):
+            applied=subprocess.run(['git','apply','--reverse','--check',str(patch)],cwd=stage,capture_output=True)
+            if applied.returncode==0:subprocess.run(['git','apply','--reverse',str(patch)],cwd=stage,check=True)
+        for patch in patches:
+            subprocess.run(['git','apply','--check',str(patch)],cwd=stage,check=True)
+            subprocess.run(['git','apply',str(patch)],cwd=stage,check=True)
+        for name in names:
+            source=stage/name;target=runtime/name
+            if not target.exists() or target.read_bytes()!=source.read_bytes():
+                target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(source,target)
+
+
+def compact_costume(folder, source):
+    """Keep 512px for small lineups; prepare a 256px fallback for the ARAM budget."""
+    profile_path=folder/'profile.json'
+    glb=ROOT/'assets/characters'/folder.name/'rigged.glb'
+    if not profile_path.exists() or not glb.exists():return None
+    profile=json.loads(profile_path.read_text())
+    if profile.get('texture_size',256)<=256:return source.read_bytes()
+    original=ROOT/'assets/game/files'/source.name
+    if digest(glb)!=profile['source_glb_sha256'] or digest(original)!=profile['costume_sha256']:
+        raise ValueError('Compact costume source hash mismatch')
+    key=digest(source)+digest(profile_path)
+    target=folder/'native-compact'/source.name;meta=target.with_suffix('.dat.json')
+    if target.exists() and meta.exists():
+        cache=json.loads(meta.read_text())
+        if cache.get('sourceKey')==key and cache.get('sha256')==digest(target):return target.read_bytes()
+    from opensmash_melee.archive import Archive
+    from opensmash_melee.glb import GLB
+    from opensmash_melee.skeleton import joints
+    from opensmash_melee.retarget import conform
+    from opensmash_melee.presentation import panel
+    from opensmash_melee.browser_skin import build_costume
+    archive=Archive.read(original);skeleton=joints(archive,profile['symbol'])
+    mesh=conform(GLB(glb).mesh(),skeleton,profile)
+    mesh['presentation']=panel(glb.parent)
+    raw,stats=build_costume(original.read_bytes(),mesh,skeleton,dict(profile,texture_size=256))
+    target.parent.mkdir(exist_ok=True);target.write_bytes(raw)
+    meta.write_text(json.dumps(dict(sourceKey=key,sha256=digest(target),stats=stats),indent=2)+'\n')
+    return raw
+
+
 def package(output, character_id=None):
     if output.exists():
         raise ValueError(f'Output already exists; choose another --output: {output}')
     runtime = CHECKOUT / 'ref/ModernGekko'
-    for patch in sorted((ROOT / 'runtime/patches/native').glob('*.patch')):
-        already = subprocess.run(['git','apply','--reverse','--check',str(patch)],cwd=runtime,capture_output=True)
-        if already.returncode:
-            subprocess.run(['git','apply','--check',str(patch)],cwd=runtime,check=True)
-            subprocess.run(['git','apply',str(patch)],cwd=runtime,check=True)
+    apply_native_patches(runtime)
     build = runtime / 'build-desktop-tools-meleepad'
     app_build = ROOT / 'build/moderngekko-native'
     run('cmake', '-S', runtime, '-B', app_build, '-G', 'Ninja',
         '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0',
+        '-DOPENSMASH_NATIVE_SOURCE=' + str(ROOT / 'runtime'),
         '-DMODERNGEKKO_APP_BUNDLE=ON', '-DMODERNGEKKO_GAMECUBE_CONTROLLERS=ON',
         '-DUSE_SYSTEM_LIBS=OFF', '-DENABLE_VULKAN=OFF', '-DENABLE_QT=OFF',
         '-DENABLE_TESTS=OFF', '-DUSE_DISCORD_PRESENCE=OFF', '-DUSE_MGBA=OFF',
@@ -81,6 +130,7 @@ def package(output, character_id=None):
     extracted = template / 'extracted/Super-Smash-Bros-Melee-GALE01-r2/sys/main.dol'
     if digest(extracted) != DOL_SHA256:
         raise ValueError('Native extraction has the wrong executable.')
+    run(sys.executable, ROOT / 'tools/specialize_native_math.py', module)
     for binary in (app_build / 'moderngekko-run', build / 'dolrecomp', module):
         dependencies = subprocess.check_output(['otool', '-L', str(binary)], text=True)
         if '/opt/homebrew' in dependencies or '/usr/local' in dependencies:
@@ -152,15 +202,24 @@ def package(output, character_id=None):
             candidates = list(folder.glob('Pl*Nr.dat'))
             if len(candidates) != 1 or candidates[0].name not in kinds: continue
             source = candidates[0]; fighter = kinds[source.name]
+            # The native runtime now shares the validated single-batch skinning path.
+            optimized = folder / 'browser' / source.name
+            if optimized.is_file(): source = optimized
             lit_source = upgrade_cached_lighting(source.read_bytes())
             row = ids.get(folder.name, {'slug':folder.name, 'name':folder.name})
-            variants = []
+            variants = []; compact_variants=[]
+            compact=compact_costume(folder,source)
             for color, slot in enumerate(SCHEMA['costumes'][str(fighter)]):
                 name = 'Characters/' + folder.name + '/' + slot['filename']
                 target = resources / name; target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(costume_variant(lit_source, fighter, color))
                 variants.append({'filename':slot['filename'], 'path':name, 'sha256':digest(target)})
-            characters.append({'slug':row['slug'], 'name':row['name'], 'fighter':fighter, 'costumes':variants})
+                if compact is not None:
+                    compact_name='Characters/'+folder.name+'/compact/'+slot['filename']
+                    compact_target=resources/compact_name;compact_target.parent.mkdir(parents=True,exist_ok=True)
+                    compact_target.write_bytes(costume_variant(compact,fighter,color))
+                    compact_variants.append({'filename':slot['filename'],'path':compact_name,'sha256':digest(compact_target)})
+            characters.append({'slug':row['slug'], 'name':row['name'], 'fighter':fighter, 'costumes':variants,'compactCostumes':compact_variants or None})
         info['characters'] = characters
         info['selected'] = ids.get(character_id, {}).get('slug', character_id) if character_id else 'vanilla:8'
         # All lineups start from the verified, unmodified imported game.

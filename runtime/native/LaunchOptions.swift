@@ -10,7 +10,7 @@ struct LaunchSchema: Decodable {
     let modes:[Choice]; let stages:[Choice]; let fighters:[Choice]; let defaults:LaunchSettings
 }
 struct Costume: Codable { let filename:String; let path:String; let sha256:String }
-struct Character: Codable { let slug:String; let name:String; let fighter:Int; let costumes:[Costume] }
+struct Character: Codable { let slug:String; let name:String; let fighter:Int; let costumes:[Costume]; let compactCostumes:[Costume]? }
 struct LaunchPlan {
     var settings:LaunchSettings
     let packed:[Int]
@@ -57,6 +57,17 @@ func launchPlan(_ input:LaunchSettings, selected:String, characters:[Character],
             }
         }
         packed.append(fighter | ((p.device=="off" ? 3 : p.device=="cpu" ? 1 : 0)<<8) | (color<<16))
+    }
+    // Three distinct high-resolution customs exceed the original preload arena.
+    // Keep the same mesh/materials and use smaller textures only for large lineups.
+    if costumes.count>=3 {
+        costumes=costumes.map { costume in
+            for character in characters {
+                if let index=character.costumes.firstIndex(where:{$0.path==costume.path}),
+                   let compact=character.compactCostumes,index<compact.count {return compact[index]}
+            }
+            return costume
+        }
     }
     return LaunchPlan(settings:settings,packed:packed,costumes:costumes)
 }

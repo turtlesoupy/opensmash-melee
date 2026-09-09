@@ -7,6 +7,7 @@ from launch_moderngekko import configure_user
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--app',type=Path,default=ROOT/'build/native/OpenSmash Melee.app')
     p.add_argument('--costume', type=Path, required=True)
     p.add_argument('--opponent-costume',type=Path)
     p.add_argument('--case', choices=['custom', 'vanilla'], required=True)
@@ -47,12 +48,12 @@ def main():
     for name in ('launch_match', 'validate_results'):
         subprocess.run(['clang', '-dynamiclib', '-O2', '-std=c11', '-I', str(include),
                         str(ROOT / f'runtime/mods/{name}.c'), '-o', str(mods / f'{name}.mgm.dylib')], check=True)
-    app = ROOT / 'build/native/OpenSmash Melee.app/Contents'
+    app = args.app.resolve() / 'Contents'
     command = [str(app / 'Helpers/Melee Engine.app/Contents/MacOS/MeleeRunner'),
                '--game', str(game), '--module', str(app / 'MacOS/game-module.dylib'),
                '--user-dir', str(user), '--title', 'OpenSmash results validation',
                '--graphics', 'Metal', '--audio', 'Null', '--mods', str(mods)]
-    env = dict(os.environ, OPENSMASH_FIXED_WINDOW='1', OPENSMASH_MATCH='1',
+    env = dict(os.environ, OPENSMASH_NATIVE_MODULE=str(app / 'MacOS/game-module.dylib'), OPENSMASH_FIXED_WINDOW='1', OPENSMASH_MATCH='1',
                OPENSMASH_PORT0='8', OPENSMASH_PORT1=str(8 | (1 << 16)),
                OPENSMASH_STAGE='31', OPENSMASH_STOCKS='1')  # Two idle human ports; original Mario opponent.
     with (out / 'game.log').open('w') as log:

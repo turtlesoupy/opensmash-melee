@@ -5,6 +5,8 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var window:NSWindow!, status:NSTextField!, play:NSButton!, mode:NSPopUpButton!, stage:NSPopUpButton!
     var level:NSTextField!, stocks:NSTextField!, minutes:NSTextField!, chosen:NSComboBox!
     var devices=[NSPopUpButton](), characters=[NSComboBox](), characterKeys=[String](), characterNames=[String]()
+    var playActivity:NSObjectProtocol?
+    var launchTimer:Timer?, launchReady=false, launchStarted=Date(), progress:NSProgressIndicator!
     var schema:LaunchSchema!, settings:LaunchSettings!, root:URL?, game:Process?, bridge:ControllerBridge?
     let deviceKeys=["keyboard","gamepad0","gamepad1","gamepad2","gamepad3","cpu","off"]
     init(_ build:Build){self.build=build}
@@ -50,7 +52,7 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate {
             badge.font = .systemFont(ofSize:10,weight:.semibold);badge.textColor=accent;badge.alignment = .right
             characterKeys=build.characters.map{$0.slug}+schema.fighters.map{"vanilla:\($0.id)"}
             characterNames=build.characters.map{$0.name}+schema.fighters.map{"\($0.label) (Melee)"}
-            chosen=combo(characterNames,24,528,710);chosen.selectItem(at:characterKeys.firstIndex(of:build.selected) ?? 0)
+            chosen=combo(characterNames,24,528,710);chosen.selectItem(at:characterKeys.firstIndex(of:option("--character") ?? build.selected) ?? 0)
             _=label("Launch mode",24,480);mode=popup(schema.modes.map{$0.label},24,450,340);mode.selectItem(at:schema.modes.firstIndex{$0.id==settings.mode} ?? 0)
             _=label("Stage",394,480);stage=popup(schema.stages.map{$0.label},394,450,340);stage.selectItem(at:schema.stages.firstIndex{$0.id==settings.stage} ?? 0)
             _=label("CPU level (1–9)",24,422);level=number(settings.level,24,390)
@@ -67,7 +69,8 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 character.selectItem(at:settings.ports[i].character=="selected" ? 0 : (characterKeys.firstIndex(of:settings.ports[i].character).map{$0+1} ?? 0));characters.append(character)
             }
             label("Stage and rules prefill VS. Classic uses player 1. Full Boot follows Melee’s original flow.",24,142,720).font = .systemFont(ofSize:11)
-            status=label("Choose your Melee USA v1.02 ROM to play.",26,98,706)
+            status=label("Choose your Melee USA v1.02 ROM to play.",54,98,670)
+            progress=NSProgressIndicator(frame:NSRect(x:26,y:98,width:18,height:18));progress.style = .spinning;progress.isDisplayedWhenStopped=false;window.contentView!.addSubview(progress)
             status.font = .systemFont(ofSize:13);status.textColor = .labelColor
             play=NSButton(title:"Play Melee",target:self,action:#selector(startGame));play.frame=NSRect(x:548,y:30,width:186,height:48);play.bezelStyle = .rounded;play.bezelColor=NSColor(calibratedRed:0.68,green:0.38,blue:0.17,alpha:1);play.contentTintColor = .white;play.controlSize = .large;play.font = .systemFont(ofSize:15,weight:.semibold);play.image=NSImage(systemSymbolName:"play.fill",accessibilityDescription:nil);play.imagePosition = .imageRight;play.keyEquivalent="\r";play.isEnabled=false;window.contentView!.addSubview(play)
             _=label("\(build.characters.count) bundled custom characters · 26 Melee fighters",24,44,510)
@@ -86,7 +89,7 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate {
         DispatchQueue.global(qos:.userInitiated).async {
             do {
                 let game=try prepare(rom,self.build){message in DispatchQueue.main.async{self.status.stringValue=message}}
-                DispatchQueue.main.async{self.root=game;self.play.isEnabled=true;self.status.stringValue="Ready. Choose your fighter and launch mode."}
+                DispatchQueue.main.async{self.root=game;self.play.isEnabled=true;self.status.stringValue="Ready. Choose your fighter and launch mode.";if arguments.contains("--play"){self.startGame()}}
             }catch{DispatchQueue.main.async{self.showError(error)}}
         }
     }
@@ -103,16 +106,49 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate {
             settings=LaunchSettings(mode:schema.modes[mode.indexOfSelectedItem].id,stage:schema.stages[stage.indexOfSelectedItem].id,level:cpu,stocks:stock,minutes:time,ports:ports)
             let plan=try launchPlan(settings,selected:try key(chosen,selectedAllowed:false),characters:build.characters,schema:schema)
             try JSONEncoder().encode(settings).write(to:support.appendingPathComponent("launch-settings.json"),options:.atomic)
-            play.isEnabled=false;status.stringValue="Starting Melee…"
+            play.isEnabled=false;play.title="Starting…";status.stringValue="Preparing your fighters…"
+            launchReady=false;launchStarted=Date();progress.startAnimation(nil)
+            playActivity=ProcessInfo.processInfo.beginActivity(options:[.userInitiated,.latencyCritical],reason:"Melee gameplay and controller input")
             DispatchQueue.global(qos:.userInitiated).async {
                 do {
                     let process=try launch(root,self.build,plan,headless:false)
-                    DispatchQueue.main.async{self.game=process;self.bridge=ControllerBridge(plan.settings,user:support.appendingPathComponent("User"));self.window.orderOut(nil)}
+                    DispatchQueue.main.async{
+                        self.game=process;self.bridge=ControllerBridge(plan.settings,user:support.appendingPathComponent("User"))
+                        self.status.stringValue="Opening Melee…"
+                        self.launchTimer=Timer.scheduledTimer(withTimeInterval:0.2,repeats:true){[weak self] _ in self?.updateLaunchStatus()}
+                    }
                     process.waitUntilExit()
-                    DispatchQueue.main.async{self.bridge=nil;self.game=nil;self.play.isEnabled=true;self.window.makeKeyAndOrderFront(nil);self.status.stringValue=process.terminationStatus==0 ? "Ready for another game." : "The game stopped. See game.log in Application Support/OpenSmash Melee."}
-                }catch{DispatchQueue.main.async{self.play.isEnabled=true;self.showError(error)}}
+                    DispatchQueue.main.async{
+                        self.launchTimer?.invalidate();self.launchTimer=nil;self.progress.stopAnimation(nil)
+                        self.endPlayActivity()
+                        self.bridge=nil;self.game=nil;self.play.isEnabled=true;self.play.title="Play Melee";self.window.makeKeyAndOrderFront(nil)
+                        if process.terminationStatus != 0 || !self.launchReady {
+                            self.status.stringValue="Melee stopped unexpectedly. Open the log for details."
+                            let alert=NSAlert();alert.messageText="Melee \(self.launchReady ? "stopped unexpectedly" : "could not finish starting")"
+                            alert.informativeText="The game exited with status \(process.terminationStatus). Your launch settings are saved."
+                            alert.addButton(withTitle:"Open game log");alert.addButton(withTitle:"Close")
+                            if alert.runModal() == .alertFirstButtonReturn {NSWorkspace.shared.open(support.appendingPathComponent("game.log"))}
+                        } else {self.status.stringValue="Game closed. Choose a fighter for another match."}
+                    }
+                }catch{DispatchQueue.main.async{self.endPlayActivity();self.progress.stopAnimation(nil);self.play.isEnabled=true;self.play.title="Play Melee";self.showError(error)}}
             }
         }catch{showError(error)}
+    }
+    func endPlayActivity() {if let activity=playActivity {ProcessInfo.processInfo.endActivity(activity);playActivity=nil}}
+    func updateLaunchStatus() {
+        guard game?.isRunning == true else{return}
+        let trace=(try? String(contentsOf:support.appendingPathComponent("game.log"),encoding:.utf8)) ?? ""
+        let ready=settings.mode==0 ? trace.contains("[opensmash] combat started") :
+            settings.mode==4 ? trace.contains("[staticrecomp] secondary idle first hit") : trace.contains("[opensmash] destination ready")
+        if ready {
+            launchReady=true;launchTimer?.invalidate();launchTimer=nil;progress.stopAnimation(nil)
+            status.stringValue="Melee is running. Close its window to return here.";window.orderOut(nil)
+            return
+        }
+        let phase=trace.contains("[opensmash] stage select ready") ? "Loading stage" :
+            trace.contains("[opensmash] character select ready") ? "Loading fighters" : "Starting Melee"
+        status.stringValue="\(phase)… \(Int(Date().timeIntervalSince(launchStarted)))s"
+        if Date().timeIntervalSince(launchStarted)>15 { status.stringValue += " · Check the game window for a confirmation prompt." }
     }
     func showError(_ error:Error){let alert=NSAlert();alert.messageText="Melee could not start";alert.informativeText=error.localizedDescription;alert.runModal()}
     func applicationShouldTerminate(_ sender:NSApplication)->NSApplication.TerminateReply {if game?.isRunning==true{game?.terminate()};return .terminateNow}
