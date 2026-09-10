@@ -52,11 +52,41 @@ def build(inputs, out):
     if os.name == "nt":
         pch = runtime / "vendor/dolphin/Source/PCH/CMakeLists.txt"
         pch.write_text(pch.read_text().replace("#return()", "return()"))
-        vendor_cmake=runtime/"vendor/dolphin/CMakeLists.txt"
-        vendor_cmake.write_text(vendor_cmake.read_text().replace("add_compile_options(/WX)", "# Keep upstream warnings visible without promoting new clang-cl diagnostics to errors."))
-        for name in ["AES.cpp","SHA1.cpp"]:
-            source_file=runtime/"vendor/dolphin/Source/Core/Common/Crypto"/name
-            source_file.write_text(source_file.read_text().replace("#ifdef _MSC_VER\n#define ATTRIBUTE_TARGET(x)", "#if defined(_MSC_VER) && !defined(__clang__)\n#define ATTRIBUTE_TARGET(x)"))
+        vendor_cmake = runtime / "vendor/dolphin/CMakeLists.txt"
+        vendor_cmake.write_text(
+            vendor_cmake.read_text().replace(
+                "add_compile_options(/WX)",
+                "# Keep upstream warnings visible without promoting new clang-cl diagnostics to errors.",
+            )
+        )
+        for name in ["AES.cpp", "SHA1.cpp"]:
+            source_file = runtime / "vendor/dolphin/Source/Core/Common/Crypto" / name
+            source_file.write_text(
+                source_file.read_text().replace(
+                    "#ifdef _MSC_VER\n#define ATTRIBUTE_TARGET(x)",
+                    "#if defined(_MSC_VER) && !defined(__clang__)\n#define ATTRIBUTE_TARGET(x)",
+                )
+            )
+    # clang-cl's Microsoft empty-variadic extension can swallow the separator
+    # before the assertion condition. Put mandatory arguments first instead.
+    assertions = runtime / "vendor/dolphin/Source/Core/Common/Assert.h"
+    assertion_text = assertions.read_text()
+    assertion_text = (
+        assertion_text.replace(
+            '"An error occurred.\\n\\n" _fmt_ "\\n\\n"',
+            '"An error occurred.\\n\\n"',
+        )
+        .replace(
+            '"Ignore and continue?",',
+            '_fmt_ "\\n\\nIgnore and continue?",',
+            1,
+        )
+        .replace(
+            "__VA_ARGS__ __VA_OPT__(, ) #_a_, __FILE__, __LINE__, __func__",
+            "#_a_, __FILE__, __LINE__, __func__ __VA_OPT__(, ) __VA_ARGS__",
+        )
+    )
+    assertions.write_text(assertion_text)
     flags = [
         "-DCMAKE_BUILD_TYPE=Release",
         "-DUSE_SYSTEM_LIBS=OFF",
@@ -74,7 +104,10 @@ def build(inputs, out):
         "-DOPENSMASH_DESKTOP_SOURCE=" + str(ROOT / "desktop"),
     ]
     if shutil.which("ccache"):
-        flags += ["-DCMAKE_C_COMPILER_LAUNCHER=ccache", "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"]
+        flags += [
+            "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
+            "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
+        ]
     if os.name == "nt":
         flags += ["-DCMAKE_CXX_FLAGS=-Wno-microsoft-include"]
     if sys.platform == "darwin":
@@ -127,7 +160,11 @@ def build(inputs, out):
     shutil.copy2(module / paths["module"], out / paths["module"])
     dol = next(p for p in host.rglob("dolrecomp" + exe) if p.is_file())
     shutil.copy2(dol, out / ("dolrecomp" + exe))
-    mod = next(host.glob("opensmash_launch.mgm.*"))
+    mod = next(
+        p
+        for p in host.glob("opensmash_launch.mgm.*")
+        if p.suffix in {".dll", ".so", ".dylib"}
+    )
     shutil.copy2(mod, out / "Mods" / mod.name)
     shutil.copytree(host / "Sys", out / "Sys", dirs_exist_ok=True)
     if os.name == "nt":

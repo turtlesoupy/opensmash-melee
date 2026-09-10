@@ -23,6 +23,7 @@ class GameSetup:
         self.lock = threading.Lock()
         self.cancelled = threading.Event()
         self.extractor = None
+        self.closing = False
         self.state = {'state': 'missing', 'message': 'Choose your Melee USA 1.02 ISO or GCM to get started.'}
         self.ready = False
 
@@ -70,6 +71,7 @@ class GameSetup:
         self.progress('ready', 'Melee USA 1.02 is ready.')
 
     def cancel(self):
+        self.closing = True
         """Stop app-owned setup work before the desktop service exits."""
         self.cancelled.set()
         process=self.extractor
@@ -88,6 +90,8 @@ class GameSetup:
             raise ValueError('Game setup is already in progress.')
         self.cancelled.clear()
         try:
+            if self.closing:
+                raise ValueError('Setup cancelled because the launcher is closing.')
             self.progress('receiving', 'Copying your disc to this computer…', 0)
             with tempfile.NamedTemporaryFile(dir=self.cache, suffix='.iso', delete=False) as output:
                 path = Path(output.name)
