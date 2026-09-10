@@ -201,6 +201,27 @@ class NativeService:
             "Triggers/L": "Q",
             "Triggers/R": "E",
         }
+        # Dolphin's backend key names differ even for Return/Space and arrows.
+        if os.name == "nt":
+            keyboard_bind["Buttons/Start"] = "RETURN"
+            keyboard_bind["Buttons/X"] = "U | SPACE"
+        elif sys.platform.startswith("linux"):
+            keyboard_bind["Buttons/X"] = "U | space"
+        if sys.platform != "darwin":
+            for direction in ["Up", "Down", "Left", "Right"]:
+                keyboard_bind["C-Stick/" + direction] = (
+                    direction.upper() if os.name == "nt" else direction
+                )
+        keyboard_bind.update(
+            {
+                "Triggers/L-Analog": "Q",
+                "Triggers/R-Analog": "E",
+                "D-Pad/Up": "T",
+                "D-Pad/Down": "G",
+                "D-Pad/Left": "F",
+                "D-Pad/Right": "H",
+            }
+        )
         pad_bind = {
             "Buttons/A": "`Button A`",
             "Buttons/B": "`Button B`",
@@ -221,6 +242,14 @@ class NativeService:
             "Triggers/L-Analog": "`Trigger L`",
             "Triggers/R-Analog": "`Trigger R`",
         }
+        pad_bind.update(
+            {
+                "D-Pad/Up": "`Pad N`",
+                "D-Pad/Down": "`Pad S`",
+                "D-Pad/Left": "`Pad W`",
+                "D-Pad/Right": "`Pad E`",
+            }
+        )
         lines = []
         for i, p in enumerate(ports):
             lines.append("[GCPad%d]" % (i + 1))
@@ -293,6 +322,8 @@ class NativeService:
                 "OPENSMASH_MATCH": "1",
                 "OPENSMASH_NATIVE_MODULE": str(module),
             }
+            if sys.platform.startswith("linux") and os.environ.get("DISPLAY"):
+                environment.setdefault("SDL_VIDEODRIVER", "x11")
             for key, name in [
                 ("mode", "MODE"),
                 ("stage", "STAGE"),
