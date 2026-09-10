@@ -3,7 +3,11 @@
 #include "moderngekko/module_abi.h"
 #include <cstdio>
 #include <cstdlib>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <dlfcn.h>
+#endif
 extern "C" {
 PPCMemWriteJournal g_mem_write_journal = nullptr;
 void* g_mem_write_journal_user = nullptr;
@@ -15,8 +19,13 @@ bool ppc_fp_available(CPUState* s, unsigned pc) {
 const ModernGekkoModuleDesc* staticrecomp_get_module() {
     static const ModernGekkoModuleDesc* module = [] {
         const char* path = std::getenv("OPENSMASH_NATIVE_MODULE");
+#ifdef _WIN32
+        HMODULE handle = path ? LoadLibraryA(path) : nullptr;
+        auto get = handle ? reinterpret_cast<ModernGekkoGetModuleFn>(GetProcAddress(handle, "staticrecomp_get_module")) : nullptr;
+#else
         void* handle = path ? dlopen(path, RTLD_LAZY | RTLD_LOCAL) : nullptr;
         auto get = handle ? reinterpret_cast<ModernGekkoGetModuleFn>(dlsym(handle, "staticrecomp_get_module")) : nullptr;
+#endif
         if (!get) { std::fprintf(stderr, "[opensmash] native skin module unavailable\n"); std::abort(); }
         // Keep the library alive while the shared skinning path calls its dispatcher.
         return get();

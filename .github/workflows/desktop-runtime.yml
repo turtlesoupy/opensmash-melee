@@ -1,0 +1,56 @@
+name: Native runtime payloads
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: macos-15, key: macos-arm64}
+          - {os: macos-15-intel, key: macos-x64}
+          - {os: ubuntu-24.04, key: linux-x64}
+          - {os: windows-2025, key: windows-x64}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - name: Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libgtk-3-dev libasound2-dev libpulse-dev libudev-dev libevdev-dev libxrandr-dev libxi-dev libx11-xcb-dev libxinerama-dev libxcursor-dev libgl1-mesa-dev libvulkan-dev libusb-1.0-0-dev libbluetooth-dev libwayland-dev libxkbcommon-dev libhidapi-dev
+      - name: Build tools
+        run: python -m pip install cmake ninja
+      - name: Download immutable private build inputs
+        env: {GH_TOKEN: '${{ github.token }}'}
+        shell: bash
+        run: |
+          test '${{ github.event.repository.private }}' = 'true'
+          gh release download desktop-inputs-v1 --pattern native-inputs.tar.gz --dir build/desktop-inputs
+      - name: Build payload
+        shell: bash
+        run: |
+          if [ '${{ runner.os }}' = 'Windows' ]; then export CC=clang-cl CXX=clang-cl; fi
+          if [ '${{ runner.os }}' = 'Linux' ]; then export CC=clang CXX=clang++; fi
+          python tools/build_desktop_runtime.py build/desktop-inputs/native-inputs.tar.gz
+          python -c "import shutil; shutil.make_archive('build/native-runtime-${{ matrix.key }}','zip','build/desktop-runtime')"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-runtime-${{ matrix.key }}
+          path: build/native-runtime-${{ matrix.key }}.zip
+          retention-days: 30
+  publish:
+    needs: runtime
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {path: build/runtime-artifacts, merge-multiple: true}
+      - name: Publish private runtime cache
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: gh release create desktop-runtime-v1 build/runtime-artifacts/*.zip --prerelease --title 'Desktop runtime v1 (internal)' --notes 'Versioned native engine payloads. No ISO or extracted game filesystem. Reused by desktop launcher builds.'

@@ -1,0 +1,13 @@
+# Included after ModernGekko's targets; no launcher UI code is compiled here.
+add_executable(opensmash-controllers "${OPENSMASH_DESKTOP_SOURCE}/controllers.cpp")
+if(TARGET SDL3-static)
+ target_link_libraries(opensmash-controllers PRIVATE SDL3-static)
+else()
+ target_link_libraries(opensmash-controllers PRIVATE SDL3::SDL3)
+endif()
+add_library(opensmash-launch MODULE "${OPENSMASH_NATIVE_SOURCE}/mods/launch_match.c")
+target_include_directories(opensmash-launch PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+set_target_properties(opensmash-launch PROPERTIES PREFIX "" OUTPUT_NAME "opensmash_launch.mgm")
+if(NOT WIN32)
+ target_link_libraries(opensmash-launch PRIVATE m)
+endif()
