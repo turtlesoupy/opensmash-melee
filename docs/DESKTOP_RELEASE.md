@@ -29,13 +29,18 @@ resources. Replacing an app does not overwrite those folders.
 - `desktop-characters-v1`: one shared generated character source library. It
   includes 1,063 complete entries; four incomplete local entries are excluded.
   It excludes original source photos and prompts.
-- `desktop-app.yml`: on launcher changes, downloads those two versioned inputs,
+- `desktop-app.yml`: manual fallback that downloads those two versioned inputs,
   builds React, freezes the service, and packages native apps. It never compiles
   the engine. Artifacts remain private and are retained for 30 days.
 
 Increment the runtime tag when changing native code or the protocol. Increment
 the character-library tag when publishing a new source library. UI changes only
-need the app workflow. Update `desktop/package.json` for release versions.
+need app packaging. Update `desktop/package.json` for release versions.
+
+Release tags now use the fun.inc GCP project for Windows and Linux. See
+[`infra/gcp/README.md`](../infra/gcp/README.md) for the active trigger, caches,
+cleanup limits, and the separate macOS packaging requirement. Ordinary pushes no
+longer trigger the GitHub app matrix.
 
 ## Disc and release checks
 
