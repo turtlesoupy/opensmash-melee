@@ -27,6 +27,17 @@ class WebGameTests(unittest.TestCase):
                 self.assertEqual(list(setup.cache.glob('*.iso')),[])
                 self.assertEqual((setup.game/'keep').read_text(),'old game')
 
+    def test_cancel_during_copy_cleans_up_and_preserves_game(self):
+        with tempfile.TemporaryDirectory() as d, patch('opensmash_melee.web_game.ISO_SIZE',4):
+            setup=GameSetup(d);setup.game.mkdir(parents=True)
+            (setup.game/'keep').write_text('old game')
+            class CancelStream:
+                def read(self,_size):setup.cancelled.set();return b'data'
+            with self.assertRaisesRegex(ValueError,'cancelled'):setup.receive(CancelStream(),4)
+            self.assertFalse(setup.lock.locked())
+            self.assertEqual(list(setup.cache.glob('*.iso')),[])
+            self.assertEqual((setup.game/'keep').read_text(),'old game')
+
     def test_restore_checks_all_saved_files(self):
         with tempfile.TemporaryDirectory() as d:
             setup=GameSetup(d);setup.game.mkdir(parents=True)

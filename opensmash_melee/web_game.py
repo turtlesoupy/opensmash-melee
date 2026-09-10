@@ -21,6 +21,8 @@ class GameSetup:
         self.cache = self.root / 'build/web-game'
         self.cache.mkdir(parents=True, exist_ok=True)
         self.lock = threading.Lock()
+        self.cancelled = threading.Event()
+        self.extractor = None
         self.state = {'state': 'missing', 'message': 'Choose your Melee USA 1.02 ISO or GCM to get started.'}
         self.ready = False
 
@@ -67,6 +69,16 @@ class GameSetup:
         self.ready = True
         self.progress('ready', 'Melee USA 1.02 is ready.')
 
+    def cancel(self):
+        """Stop app-owned setup work before the desktop service exits."""
+        self.cancelled.set()
+        process=self.extractor
+        if process is not None and process.poll() is None:
+            process.terminate()
+        if self.lock.acquire(timeout=5):self.lock.release()
+        elif process is not None and process.poll() is None:
+            process.kill()
+
     def receive(self, stream, size):
         if size != ISO_SIZE:
             raise ValueError('Choose a full, unmodified Melee USA 1.02 ISO or GCM (1,459,978,240 bytes). RVZ, ZIP and patched images are not supported.')
@@ -74,6 +86,7 @@ class GameSetup:
             raise ValueError('Not enough free disk space. Free at least 3 GB for disc setup and try again.')
         if not self.lock.acquire(blocking=False):
             raise ValueError('Game setup is already in progress.')
+        self.cancelled.clear()
         try:
             self.progress('receiving', 'Copying your disc to this computer…', 0)
             with tempfile.NamedTemporaryFile(dir=self.cache, suffix='.iso', delete=False) as output:
@@ -82,7 +95,9 @@ class GameSetup:
                 remaining = size
                 try:
                     while remaining:
+                        if self.cancelled.is_set():raise ValueError("Disc setup cancelled. Choose your file to try again.")
                         chunk = stream.read(min(8 << 20, remaining))
+                        if self.cancelled.is_set():raise ValueError("Disc setup cancelled. Choose your file to try again.")
                         if not chunk:
                             raise ValueError('The transfer was interrupted. Choose the file and try again.')
                         output.write(chunk)
@@ -113,8 +128,16 @@ class GameSetup:
                 tool=Path(os.environ['OPENSMASH_RUNTIME'])/('dolrecomp.exe' if os.name=='nt' else 'dolrecomp')
                 command=[str(tool),'extract',str(iso),str(staging)]
             if not tool.is_file():raise ValueError('The local installation is missing the disc extractor. Install the complete release tools and try again.')
-            result = subprocess.run(command, capture_output=True, text=True, timeout=300)
-            if result.returncode:
+            if self.cancelled.is_set():raise ValueError('Disc setup cancelled. Choose your file to try again.')
+            process=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+            self.extractor=process
+            if self.cancelled.is_set():process.terminate()
+            try:process.communicate(timeout=300)
+            except subprocess.TimeoutExpired:
+                process.kill();process.communicate();raise ValueError('Disc extraction timed out. Please try again.')
+            finally:self.extractor=None
+            if self.cancelled.is_set():raise ValueError('Disc setup cancelled. Choose your file to try again.')
+            if process.returncode:
                 raise ValueError('Disc extraction failed. Check free disk space and try again.')
             if hashlib.sha256((staging/'sys/main.dol').read_bytes()).hexdigest() != DOL_SHA256:
                 raise ValueError('Extracted executable failed verification.')

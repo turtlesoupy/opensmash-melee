@@ -182,11 +182,11 @@ app.on("before-quit", (event) => {
   event.preventDefault();
   quitting = true;
   const stop = origin
-    ? fetch(origin + "/api/native/stop", {
+    ? fetch(origin + "/api/native/shutdown", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-OpenSmash-Token": token },
         body: "{}",
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(20000),
       })
     : Promise.resolve();
   stop
