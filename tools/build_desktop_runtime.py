@@ -104,6 +104,7 @@ def build(inputs, out):
         "-DGAME_ID=GALE01",
         "-DGENERATED_DIR=" + str(source / "generated"),
         "-DRECOMPCORE_MODULE_ENABLE_IPO=OFF",
+        *(["-DCMAKE_C_COMPILER_LAUNCHER=ccache"] if shutil.which("ccache") else []),
         *(["-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0"] if sys.platform == "darwin" else [])
     )
     run("cmake", "--build", module, "-j", jobs)
