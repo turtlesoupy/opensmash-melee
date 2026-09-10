@@ -30,6 +30,14 @@ static const char* costume_names[] = {"PlMrNr.dat", "PlMrYe.dat", "PlMrBk.dat", 
 static unsigned costume_sizes[29];
 EMSCRIPTEN_KEEPALIVE void opensmash_costume_size(unsigned slot,unsigned size) {if(slot<sizeof(costume_sizes)/sizeof(costume_sizes[0]) && size>=32 && size<=2097152)costume_sizes[slot]=size;else abort();}
 static atomic_uint combat_frames;
+/* Browser-only first-scene barrier. Use Melee's scheduler pause bits so the
+ * clock, CPUs and countdown cannot advance behind the preparation screen. */
+static atomic_int preparation;
+static unsigned preparation_pause;
+EMSCRIPTEN_KEEPALIVE int opensmash_preparation_state(void) {return atomic_load(&preparation);}
+EMSCRIPTEN_KEEPALIVE void opensmash_finish_preparation(void) {
+    if(atomic_load(&preparation)==2)atomic_store(&preparation,3);
+}
 static atomic_int selected_fighter = -1;
 EMSCRIPTEN_KEEPALIVE unsigned opensmash_combat_frames(void) { return atomic_load(&combat_frames); }
 EMSCRIPTEN_KEEPALIVE void opensmash_choose_fighter(int choice) {
@@ -41,7 +49,7 @@ EMSCRIPTEN_KEEPALIVE void opensmash_configure_launch(int mode,int stage,int leve
                                                    unsigned p0,unsigned p1,unsigned p2,unsigned p3) {
     launch_mode=mode;arena=stage;cpu_level=level;stocks=stock;minutes=mins;
     port_config[0]=p0;port_config[1]=p1;port_config[2]=p2;port_config[3]=p3;
-    validate_config();opensmash_choose_fighter(p0&255);
+    validate_config();atomic_store(&preparation,mode==0?1:4);opensmash_choose_fighter(p0&255);
 }
 #endif
 
@@ -205,8 +213,14 @@ static void combat_frame(CPUState* s) {
     (void)s;
     mark_ready();
 #ifdef __EMSCRIPTEN__
-    if (atomic_fetch_add(&combat_frames, 1) == 0)
-        fprintf(stderr, "[opensmash] combat started\n");
+    unsigned frame=atomic_fetch_add(&combat_frames, 1);
+    if (frame == 0)fprintf(stderr, "[opensmash] combat started\n");
+    if (frame == 1 && atomic_load(&preparation)==1) {
+        preparation_pause=moderngekko_mod_read(s,0x80479D68,1);
+        write8(s,0x80479D68,preparation_pause|3);
+        atomic_store(&preparation,2);
+        fprintf(stderr,"[opensmash] preparing first scene; simulation held\n");
+    }
 #else
     static unsigned native_frames;
     if (native_frames++ == 0)
@@ -215,6 +229,15 @@ static void combat_frame(CPUState* s) {
         fprintf(stderr, "[opensmash] native combat frame=180\n");
 #endif
 }
+#ifdef __EMSCRIPTEN__
+static void preparation_poll(CPUState* s) {
+    if(atomic_load(&preparation)==3) {
+        write8(s,0x80479D68,preparation_pause);
+        atomic_store(&preparation,4);
+        fprintf(stderr,"[opensmash] first scene ready; simulation resumed\n");
+    }
+}
+#endif
 /* Results names are normally an atlas indexed by fighter kind. Read the
  * custom identity from the loaded costume instead, so shared movesets and
  * vanilla opponents remain independent. No allocation or combat-frame work. */
@@ -457,6 +480,9 @@ static void normalized_draw(CPUState* s) {
     static unsigned reported; if(!reported){reported=identity;fprintf(stderr,"[opensmash] stature scale=%.4f offset=%.4f root=%08x\n",scale,offset,root);}
 }
 static void normalized_draw_patch(CPUState* s) {
+#ifdef __EMSCRIPTEN__
+    preparation_poll(s);
+#endif
     normalized_draw(s);
     /* Verified GALE01 1.02 entry instruction: mflr r0 (7c0802a6).
      * A patch is required: observational hooks restore register arguments. */
@@ -503,6 +529,7 @@ static void damage_emblem(CPUState* s) {
     }
 }
 static const ModernGekkoModHook hooks[] = {
+
     RECOMP_HOOK(0x8005FDDC, flash_begin),
     RECOMP_HOOK(0x802A7D8C, held_item_begin),
     RECOMP_HOOK_RETURN(0x802A7D8C, held_item_end),

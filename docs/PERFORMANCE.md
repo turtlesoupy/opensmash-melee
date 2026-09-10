@@ -145,3 +145,71 @@ full-resolution costumes exceeded Melee's preload arena. Large lineups now use
 256px variants, while one/two-custom lineups retain 512px. Positions, normals and
 weights are byte-identical across the full/compact variants for all eight customs.
 Four-player sustained performance still needs its own benchmark.
+
+
+## Chrome first-visit reproduction (September 9)
+
+A headed Chrome 152 run using a new, empty user-data directory reproduced the
+reported startup slowdown. The test clicked Donald Trump/Fox immediately after
+the roster appeared, against default CPU Peach on Battlefield. It used the normal
+local URL, host skinning, audio enabled, and Wasm build `673eaa564ee77c23`.
+Only the browser profile was cold; the local server already had converted assets.
+
+The first visit showed 0 FPS at 16–17 seconds after the click, 5 FPS at 18–19
+seconds, 25–30 FPS at 20–22 seconds, and 52 FPS at 24 seconds. The reported
+click-to-match time was 17.17 seconds; the first measured 31-second combat window
+averaged 45.61 FPS. A repeat visit in that same profile reached the match in
+7.17 seconds and its first combat intervals were approximately 17, 47, 59, and
+60 FPS. This confirms a cold-start performance problem, but does not isolate
+Wasm compilation versus shader compilation or other first-use costs.
+
+Audio rendered during the measurement and the first full combat window recorded
+zero ring-buffer underruns. That counter alone does not certify glitch-free
+sound during multi-second startup stalls. Sustained 60 FPS remains unproven.
+
+Local reproduction script, per-second UI samples, screenshots, and runtime traces:
+`build/browser-cold-start/`. Startup telemetry now retains the first 30 combat
+intervals and browser identity, so long averages no longer hide this failure.
+
+
+## First-scene preparation changes and remaining failure
+
+Browser build `e19e66da26b11aa1` seeds a portable Dolphin pipeline UID cache,
+compiles it locally, and holds the default free-for-all scene using Melee's
+scheduler pause bits while checking rendered frame intervals. Release restores
+the original flags. The clock and CPUs cannot advance behind this preparation
+screen. Other launch modes retain their previous startup behavior; native code
+paths are unchanged. This is not comprehensive shader coverage for every fighter
+and stage.
+
+The audio worklet connects when the scene is presented, primes with 1,024 samples,
+and the producer queues 3,072 frames (64 ms at 48 kHz). Startup audio is drained
+while held. Three Node tests cover readiness and audio priming/underrun counting;
+the web production build and 51 Python tests passed.
+
+This is a partial mitigation, **not a passing browser performance fix**. A fresh,
+headed, focused Chrome profile with Alan Turing/Mario on Battlefield still took
+27.83 seconds to its first displayed FPS sample, which was 11 FPS. Preparation
+held combat at frame 2; the first screenshot confirms 8:00, full stocks and the
+Ready countdown. The first 30-second combat window averaged 27.57 FPS and counted
+5,376 missing audio samples. The same profile's repeat visit started in 9.24
+seconds and its measured windows averaged 44.68 and 53.74 FPS, with zero ring
+underruns. Neither passes the 60 FPS criterion. Machine load was not controlled;
+visibility and focus were recorded throughout. Zero ring underruns alone does
+not certify perceptually clean game audio.
+
+Paused rendering readiness does not establish readiness of the complete running
+simulation. Further profiling must include resumed gameplay and its first-use
+work, rather than extending the paused-render loading gate or treating this as
+only a first-visit issue.
+
+Reproduce with Playwright installed and available to Node:
+
+```sh
+node tools/validate_browser_startup.cjs build/browser-startup-validation "Alan Turing"
+```
+
+The script creates an isolated profile, clicks immediately, measures first and
+repeat visits, and closes its own browser. It never clears the user's profile.
+On macOS with AeroSpace, `OPENSMASH_FOCUS_TEST_WINDOW=1` focuses the test window
+without modifying configuration. Local evidence: `build/browser-startup-fix/turing-final/`.

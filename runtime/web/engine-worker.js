@@ -8,7 +8,8 @@ const buttonUntil = new Float64Array(64);
 const buttonUntilFrame = new Uint32Array(64);
 let phase = 'worker startup';
 let skinVerificationComplete = false;
-let combatReached = false, startupReported = false;
+let combatReached = false, startupReported = false, firstPlayableAt=0;
+let preparationSamples=[], preparationLastFrame=0, preparationReleased=false, preparationStarted=0, preparationFailed=false;
 const costumeSizes=new Map();
 let runtimeBuild, startOptions, activeSelection, readyForSelection = false;
 const report = (type, data) => {
@@ -39,11 +40,13 @@ self.onmessage = async ({data}) => {
     return;
   }
   if (data.type === 'confirm') {
+    if(combatReached && activeSelection?.launch?.mode===0 && !preparationReleased)return;
     pulseUntil=performance.now()+150;
     engine?._opensmash_set_pad(0, 0x100, 0x80808080, 0, 1);
     return;
   }
   if (data.type === 'pad') {
+    if(combatReached && activeSelection?.launch?.mode===0 && !preparationReleased)return;
     const now=performance.now(), raw=data.values[1],port=data.values[0];
     if(!Number.isInteger(port)||port<0||port>3)return;
     for(let bit=0;bit<16;bit++){
@@ -65,11 +68,12 @@ self.onmessage = async ({data}) => {
   }
   if (data.type !== 'start' || engine) return;
   try {
+    const {sceneReady}=await import('./scene-preparation.mjs');
     const buildResponse=await fetch('./opensmash-web-build.json');
     if(!buildResponse.ok)throw Error('The local engine build is incomplete. Finish the browser build first.');
     const build=await buildResponse.json();
     runtimeBuild=build;startOptions=data;
-    report('session',{build,mode:data.warm?'warming':data.benchmark==='1'?'cpu-benchmark':'human',skin:data.skin||'gx',character:data.character,fighter:data.fighter,profile:data.profile||'0',resolution:[960,720]});
+    report('session',{browser:navigator.userAgent,hardwareConcurrency:navigator.hardwareConcurrency,build,mode:data.warm?'warming':data.benchmark==='1'?'cpu-benchmark':'human',skin:data.skin||'gx',character:data.character,fighter:data.fighter,profile:data.profile||'0',resolution:[960,720]});
     const {inspectDisc, ISO_SHA256} = await import('./disc.mjs');
     const {mountSizedFile, mountSystemBundle, costumeSlot, COSTUME_SLOTS} = await import('./local-files.mjs');
     report('status', {message: 'Loading Melee…'});
@@ -78,9 +82,12 @@ self.onmessage = async ({data}) => {
     engine = await createMelee({
       canvas: new OffscreenCanvas(960, 720),
       onFrame: bitmap => {
+        const preparing=activeSelection?.launch?.mode===0 && engine?._opensmash_preparation_state && engine._opensmash_preparation_state()!==4;
+        if(combatReached && preparing) {bitmap.close();return;}
         postMessage({type: "frame", bitmap}, [bitmap]);
         if (combatReached && !startupReported) {
-          startupReported = true;
+          startupReported = true;firstPlayableAt=performance.now();
+          report('playable',{});
           const selected=activeSelection||data;
           report('startup-performance', {character:selected.character, build:build.id,warm:!!data.warm,
             warmReadyBeforeClick:!!selected.warmReadyBeforeClick,
@@ -96,6 +103,7 @@ self.onmessage = async ({data}) => {
           readyForSelection=true;report('ready-for-selection',{});
         }
         if (text.includes('[opensmash] combat started')) combatReached = true;
+        if (text.includes('[opensmash] preparing first scene'))report('status',{message:'Preparing the first scene…'});
         if (data.profile === 'dispatch' && text.includes('[opensmash] combat started') && engine?.FS.analyzePath('/tmp/dispatch.csv').exists) {
           report('startup-dispatch', {csv:engine.FS.readFile('/tmp/dispatch.csv',{encoding:'utf8'}).slice(-45000)});
         }
@@ -110,6 +118,7 @@ self.onmessage = async ({data}) => {
       onAbort: reason => report('error', {message: `Melee stopped: ${reason}`}),
       onVerifyProgress: bytes => report('status', {message: `Checking your game… ${Math.floor(bytes / data.iso.size * 100)}%`}),
     });
+    if(!engine._opensmash_preparation_state)preparationReleased=true;
     phase = 'mounting game files';
     report('status', {message: 'Preparing game files…'});
     const {FS, WORKERFS} = engine;
@@ -160,6 +169,21 @@ self.onmessage = async ({data}) => {
     FS.mkdir('/user');
     FS.mount(engine.IDBFS, {autoPersist:true}, '/user');
     await new Promise((resolve,reject)=>FS.syncfs(true,error=>error?reject(error):resolve()));
+    // Compile known pipelines before the first game frame. The engine validates
+    // the portable UID cache version; Chrome compiles it for this user's GPU.
+    const shaderCache='/user/Cache/GALE01.uidcache';
+    if(!FS.analyzePath(shaderCache).exists || FS.stat(shaderCache).size<=8) {
+      report('status',{message:'Preparing graphics for your first match…'});
+      const response=await fetch('./shader-warmup.json');
+      if(!response.ok)throw Error('Could not load graphics preparation data.');
+      const seed=await response.json();
+      const bytes=Uint8Array.from(atob(seed.data),c=>c.charCodeAt(0));
+      const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),x=>x.toString(16).padStart(2,'0')).join('');
+      if(seed.version!==1 || digest!==seed.sha256)throw Error('Invalid graphics preparation data.');
+      FS.mkdirTree('/user/Cache');FS.writeFile(shaderCache,bytes);
+      report('shader-warmup',{bytes:bytes.length,sha256:digest});
+    }
+
     FS.mkdir('/sys');
     phase = 'loading system resources';
     report('status', {message: 'Loading system resources…'});
@@ -179,7 +203,13 @@ self.onmessage = async ({data}) => {
       audioIndices=indices;
       setInterval(() => {
         let write = Atomics.load(indices, 0), read = Atomics.load(indices, 1);
-        while (((write-read+capacity)%capacity) < 1536) {
+        if(activeSelection?.launch?.mode===0 && !preparationReleased) {
+          // Drain startup sound rather than replaying it after the loading screen.
+          engine._opensmash_audio_mix();Atomics.store(indices,1,write);return;
+        }
+        // Keep 64 ms queued so short shader/GC scheduling hiccups do not
+        // empty the audio ring. This changes audio buffering, not game speed.
+        while (((write-read+capacity)%capacity) < 3072) {
           const pointer = engine._opensmash_audio_mix() >>> 1;
           for(let i=0;i<512;i++)for(let channel=0;channel<2;channel++)
             ring[((write+i)%capacity)*2+channel] = engine.HEAP16[pointer+i*2+channel]/32768;
@@ -191,7 +221,25 @@ self.onmessage = async ({data}) => {
         }
       }, 10);
     }
+    setInterval(()=>{
+      if(preparationFailed || engine._opensmash_preparation_state?.()!==2)return;
+      if(!preparationStarted)preparationStarted=performance.now();
+      if(performance.now()-preparationStarted>60000) {
+        preparationFailed=true;
+        report('error',{message:'Graphics did not settle in time. Close other running games and try again.'});
+        return;
+      }
+      const count=engine._opensmash_frame_count();
+      if(!preparationLastFrame)preparationLastFrame=count;
+      for(let i=preparationLastFrame;i<count;i++)preparationSamples.push(engine._opensmash_frame_interval(i)/1000);
+      preparationLastFrame=count;preparationSamples=preparationSamples.slice(-30);
+      if(sceneReady(preparationSamples)) {
+        report('scene-prepared',{renderFrames:count,combatFrames:engine._opensmash_combat_frames(),frameTimes:preparationSamples});
+        preparationReleased=true;engine._opensmash_finish_preparation();
+      }
+    },50);
     let lastFrame = 0, lastTime = performance.now(), batchStart = lastTime, samples = [];
+    let earlyCombatIntervals = 0;
     let combatStart=0,combatFirstFrame=0,lastCombat=0,combatSamples=[],combatUnderruns=0,combatAudioSamples=0,combatProfile=data.profile||'0';
     setInterval(() => {
       const count = engine._opensmash_frame_count(), now = performance.now();
@@ -201,7 +249,16 @@ self.onmessage = async ({data}) => {
       const activeProfile=data.profile==='skin'&&skinVerificationComplete?'0':data.profile||'0';
       const frameTimes = [];
       for (let i = Math.max(lastFrame, count - 4096); i < count; i++) frameTimes.push(engine._opensmash_frame_interval(i) / 1000);
-      report('metrics', {combatFrames:engine._opensmash_combat_frames?.() || 0,frames: count, fps: (count - lastFrame) * 1000 / (now - lastTime), frameTimes});
+      report('metrics', {combatFrames:engine._opensmash_combat_frames?.() || 0,frames: count, fps: (count - lastFrame) * 1000 / (now - lastTime), completeCombatInterval:!firstPlayableAt || lastTime>=firstPlayableAt, frameTimes});
+      // Keep the first 30 one-second combat intervals: a long-window average
+      // hides cold-start stalls and cannot explain brief audio breakup.
+      if(combatFrames>0 && firstPlayableAt && lastTime>=firstPlayableAt && earlyCombatIntervals<30) {
+        earlyCombatIntervals++;
+        report('startup-frame-performance', {interval:earlyCombatIntervals,
+          combatFrames, fps:(count-lastFrame)*1000/(now-lastTime),
+          longestFrameMs:Math.max(0,...frameTimes),
+          audioUnderrunSamples:audioIndices?Atomics.load(audioIndices,2):0});
+      }
       samples.push(...frameTimes);
       if(combatFrames===lastCombat&&combatStart){combatStart=0;combatSamples=[];}
       if(combatFrames>lastCombat&&(!combatStart||activeProfile!==combatProfile)){

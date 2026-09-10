@@ -11,6 +11,7 @@ export default function Game({fighter,settings,roster,onClose}:{fighter:Fighter;
  const touch=useRef(new Set<string>());
  useEffect(()=>{
   let worker:Worker|undefined,audioNode:AudioWorkletNode|undefined,raf=0,closed=false;const abort=new AbortController(),keys=new Set<string>(),requestedAt=Date.now();
+  let playable=settings.mode!==0, audioConnecting=false;
   let running=false,firstFrame=true,selectionAcknowledged=false,fullBootVisible=false,frameSamples:number[]=[],launchPlan:any;
   const skin=new URLSearchParams(location.search).get('skin')==='gx'?'gx':'host';
   const send=(schedule=true)=>{
@@ -55,7 +56,8 @@ export default function Game({fighter,settings,roster,onClose}:{fighter:Fighter;
    }));
    setStatus('Loading Melee…');if(closed)return;
    const audio=session.audio;
-   connectAudio(audio).then(node=>{if(closed)node.disconnect();else audioNode=node;}).catch(()=>{});
+   const startAudio=()=>{if(audioConnecting)return;audioConnecting=true;connectAudio(audio).then(node=>{if(closed)node.disconnect();else audioNode=node;}).catch(()=>{audioConnecting=false;});};
+   if(playable)startAudio();
    worker.onerror=e=>{if(!closed)setError(e.message||'The game worker stopped.');};
    worker.onmessage=({data})=>{
     if(closed)return;
@@ -64,10 +66,11 @@ export default function Game({fighter,settings,roster,onClose}:{fighter:Fighter;
     if(data.type==='frame' && settings.mode===4 && selectionAcknowledged && !fullBootVisible){fullBootVisible=true;setStatus('');}
     if(data.type==='status' && !fullBootVisible)setStatus(data.message);
     if(data.type==='started'){running=true;}
+    if(data.type==='playable'){playable=true;setStatus('');startAudio();}
     if(data.type==='error'){setError(previous=>previous||data.message);running=false;}
-    if(data.type==='log'){console.log('[Melee]',data.text);if(data.text.includes('[opensmash] destination ready'))setStatus('');}
+    if(data.type==='log'){console.log('[Melee]',data.text);if(playable&&data.text.includes('[opensmash] destination ready'))setStatus('');}
     if(data.type==='metrics'){
-     setFps(data.combatFrames>0?data.fps:null);frameSamples.push(...data.frameTimes);if(frameSamples.length>36000)frameSamples=frameSamples.slice(-36000);
+     setFps(playable&&data.completeCombatInterval!==false&&data.combatFrames>0?data.fps:null);frameSamples.push(...data.frameTimes);if(frameSamples.length>36000)frameSamples=frameSamples.slice(-36000);
      (window as any).meleePerformance={frames:data.frames,fps:data.fps,frameTimes:frameSamples};
     }
    };
