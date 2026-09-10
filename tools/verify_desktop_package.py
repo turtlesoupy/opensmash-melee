@@ -1,6 +1,6 @@
 """Smoke-test a distributable service from a clean profile without supplying a ROM."""
 
-import argparse, json, os, queue, secrets, subprocess, tempfile, threading, time, urllib.error, urllib.request
+import argparse, json, os, queue, secrets, subprocess, sys, tempfile, threading, time, urllib.error, urllib.request
 from pathlib import Path
 
 
@@ -20,6 +20,27 @@ def verify(resources):
         resources
         / "backend/melee-backend"
         / ("melee-backend.exe" if os.name == "nt" else "melee-backend")
+    )
+    runtime = resources / "runtime"
+    manifest = json.loads((runtime / "runtime.json").read_text())
+    suffix = (
+        ".dll" if os.name == "nt" else ".dylib" if sys.platform == "darwin" else ".so"
+    )
+    plugin = runtime / "Mods" / ("opensmash_launch.mgm" + suffix)
+    if not plugin.is_file():
+        raise ValueError("Launch plugin has the wrong platform filename")
+    # Loading the tools catches missing shared libraries before asking for an ISO.
+    subprocess.run(
+        [str(runtime / manifest["runner"]), "--help"],
+        check=True,
+        capture_output=True,
+        timeout=20,
+    )
+    subprocess.run(
+        [str(runtime / manifest["controllers"])],
+        check=True,
+        capture_output=True,
+        timeout=20,
     )
     token = secrets.token_hex(32)
     with tempfile.TemporaryDirectory(prefix="opensmash-package-") as folder:

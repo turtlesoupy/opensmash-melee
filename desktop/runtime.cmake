@@ -11,3 +11,7 @@ set_target_properties(opensmash-launch PROPERTIES PREFIX "" OUTPUT_NAME "opensma
 if(NOT WIN32)
  target_link_libraries(opensmash-launch PRIVATE m)
 endif()
+
+if(APPLE)
+ set_target_properties(opensmash-launch PROPERTIES SUFFIX ".dylib")
+endif()

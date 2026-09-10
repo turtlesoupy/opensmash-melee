@@ -165,7 +165,8 @@ def build(inputs, out):
         for p in host.glob("opensmash_launch.mgm.*")
         if p.suffix in {".dll", ".so", ".dylib"}
     )
-    shutil.copy2(mod, out / "Mods" / mod.name)
+    mod_name = "opensmash_launch.mgm" + lib
+    shutil.copy2(mod, out / "Mods" / mod_name)
     shutil.copytree(host / "Sys", out / "Sys", dirs_exist_ok=True)
     if os.name == "nt":
         # Users need no Visual Studio installation. Bundle the redistributable CRT
@@ -207,7 +208,7 @@ def build(inputs, out):
             out / paths["module"],
             out / paths["controllers"],
             out / ("dolrecomp" + exe),
-            out / "Mods" / mod.name,
+            out / "Mods" / mod_name,
         ]:
             run("codesign", "--force", "--sign", "-", p)
         run("codesign", "--force", "--sign", "-", app)
