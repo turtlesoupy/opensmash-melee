@@ -51,3 +51,18 @@ Linux targets x64 on Ubuntu 24.04-compatible systems. A successful CI build is n
 proof of gameplay on Windows or Linux; record platform smoke tests before calling
 those platforms release-validated. The first native run also asks Melee to create
 its local memory-card save; accept that once in the game window.
+
+## Validation recorded during development
+
+The Apple Silicon packaged app passed clean-profile ISO gating, invalid-disc
+rejection and local-session authentication checks. The shared launcher reached
+Classic selection and custom-character combat at approximately 60 FPS. A four
+custom-character lineup also reached 180 combat frames. Large lineups use the
+existing 256-pixel texture budget and shared host skinning to stay within Melee's
+preload memory limits. Mode preferences are stored outside the changing service
+origin and survive app restarts.
+
+The common launcher currently exposes the web roster's six standard retarget
+families. The earlier macOS picker and its separately built experimental retarget
+variants remain in the repository; those experimental variant controls have not
+yet been moved into the shared launcher.

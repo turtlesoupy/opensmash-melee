@@ -18,11 +18,12 @@ bool ppc_fp_available(CPUState* s, unsigned pc) {
 }
 const ModernGekkoModuleDesc* staticrecomp_get_module() {
     static const ModernGekkoModuleDesc* module = [] {
-        const char* path = std::getenv("OPENSMASH_NATIVE_MODULE");
 #ifdef _WIN32
-        HMODULE handle = path ? LoadLibraryA(path) : nullptr;
+        const wchar_t* path = _wgetenv(L"OPENSMASH_NATIVE_MODULE");
+        HMODULE handle = path ? LoadLibraryW(path) : nullptr;
         auto get = handle ? reinterpret_cast<ModernGekkoGetModuleFn>(GetProcAddress(handle, "staticrecomp_get_module")) : nullptr;
 #else
+        const char* path = std::getenv("OPENSMASH_NATIVE_MODULE");
         void* handle = path ? dlopen(path, RTLD_LAZY | RTLD_LOCAL) : nullptr;
         auto get = handle ? reinterpret_cast<ModernGekkoGetModuleFn>(dlsym(handle, "staticrecomp_get_module")) : nullptr;
 #endif
