@@ -49,6 +49,9 @@ def build(inputs, out):
                 'set(ENABLE_CUBEB ON CACHE BOOL "" FORCE)',
             )
         )
+    if os.name == "nt":
+        pch = runtime / "vendor/dolphin/Source/PCH/CMakeLists.txt"
+        pch.write_text(pch.read_text().replace("#return()", "return()"))
     flags = [
         "-DCMAKE_BUILD_TYPE=Release",
         "-DUSE_SYSTEM_LIBS=OFF",
