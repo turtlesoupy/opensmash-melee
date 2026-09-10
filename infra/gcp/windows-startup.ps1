@@ -5,7 +5,11 @@ $reported = $false
 try {
 New-Item C:\opensmash -ItemType Directory -Force | Out-Null
 Start-Transcript -Path C:\opensmash-build.log
-function Metadata($key) { (Invoke-WebRequest -UseBasicParsing -Headers @{'Metadata-Flavor'='Google'} -Uri "http://metadata.google.internal/computeMetadata/v1/instance/attributes/$key").Content }
+function Metadata($key) {
+  $content = (Invoke-WebRequest -UseBasicParsing -Headers @{'Metadata-Flavor'='Google'} -Uri "http://metadata.google.internal/computeMetadata/v1/instance/attributes/$key").Content
+  if ($content -is [byte[]]) { return [Text.Encoding]::UTF8.GetString($content) }
+  return [string]$content
+}
 $env:RELEASE_BUCKET = Metadata 'release-bucket'
 $env:RELEASE_BUILD = Metadata 'release-build'
 $env:RELEASE_PLATFORM = Metadata 'release-platform'

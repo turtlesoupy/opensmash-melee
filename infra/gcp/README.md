@@ -79,3 +79,12 @@ Private inputs were copied from the existing verified local release caches:
 `inputs/desktop-inputs-v3/native-inputs-v3.tar.gz`,
 `inputs/desktop-characters-v1/characters.tar.gz`, and the two Mac ZIPs under
 `inputs/desktop-runtime-v1/`. No ISO or extracted game filesystem is staged.
+
+## Infrastructure validation
+
+The 2026-09-10 smoke run verified Linux and Windows VM provisioning and bucket
+writes using the attached service account. The Windows run also parsed the actual
+release startup script with Windows PowerShell. A byte-array metadata decoding
+issue was corrected during this check. Local tests: 74 passed, including release
+ref validation and cleanup on provisioning failure. Full application compilation
+is deliberately deferred to a release tag.

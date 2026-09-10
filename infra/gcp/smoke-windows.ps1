@@ -1,5 +1,9 @@
 $ErrorActionPreference = 'Stop'
-  function Metadata($key) { (Invoke-WebRequest -UseBasicParsing -Headers @{'Metadata-Flavor'='Google'} -Uri "http://metadata.google.internal/computeMetadata/v1/$key").Content }
+  function Metadata($key) {
+  $content = (Invoke-WebRequest -UseBasicParsing -Headers @{'Metadata-Flavor'='Google'} -Uri "http://metadata.google.internal/computeMetadata/v1/$key").Content
+  if ($content -is [byte[]]) { return [Text.Encoding]::UTF8.GetString($content) }
+  return [string]$content
+}
   $tokens = $null
   $errors = $null
   [System.Management.Automation.Language.Parser]::ParseInput((Metadata 'instance/attributes/validation-script'), [ref]$tokens, [ref]$errors) | Out-Null
