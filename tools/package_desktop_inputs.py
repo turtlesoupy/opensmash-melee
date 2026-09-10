@@ -20,7 +20,7 @@ def package(output):
             archive.addfile(entry,io.BytesIO(raw));hashes[name]=hashlib.sha256(raw).hexdigest()
         for path in runtime.rglob('*'):
             rel=path.relative_to(runtime)
-            if not path.is_file() or path.is_symlink() or any(p=='.git' or p.startswith('build') or p in ['.cache','node_modules'] for p in rel.parts):continue
+            if not path.is_file() or path.is_symlink() or (rel.parts[0].startswith('build') or any(p in ['.git','.cache','node_modules','__pycache__','CMakeFiles'] for p in rel.parts)):continue
             if path.suffix.lower() in ['.iso','.gcm','.rvz','.dol','.dat','.o','.a','.so','.dylib','.exe','.dll','.pyc']:continue
             raw=None
             if rel.as_posix()=='CMakeLists.txt':raw=(path.read_text()+'\ninclude("${OPENSMASH_DESKTOP_SOURCE}/runtime.cmake")\n').encode()

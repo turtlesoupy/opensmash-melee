@@ -31,13 +31,13 @@ jobs:
         shell: bash
         run: |
           test '${{ github.event.repository.private }}' = 'true'
-          gh release download desktop-inputs-v1 --pattern native-inputs.tar.gz --dir build/desktop-inputs
+          gh release download desktop-inputs-v2 --pattern native-inputs-v2.tar.gz --dir build/desktop-inputs
       - name: Build payload
         shell: bash
         run: |
           if [ '${{ runner.os }}' = 'Windows' ]; then export CC=clang-cl CXX=clang-cl; fi
           if [ '${{ runner.os }}' = 'Linux' ]; then export CC=clang CXX=clang++; fi
-          python tools/build_desktop_runtime.py build/desktop-inputs/native-inputs.tar.gz
+          python tools/build_desktop_runtime.py build/desktop-inputs/native-inputs-v2.tar.gz
           python -c "import shutil; shutil.make_archive('build/native-runtime-${{ matrix.key }}','zip','build/desktop-runtime')"
       - uses: actions/upload-artifact@v4
         with:
