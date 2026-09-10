@@ -38,6 +38,9 @@ def main():
         opponent.write_bytes(costume_variant(args.opponent_costume.read_bytes(),8,1))
     user = out / 'user'
     configure_user(user, pipe=True)
+    saved=ROOT/'build/native-target-smoke/user/SmokeUser/GC'
+    if saved.is_dir():shutil.copytree(saved,user/'GC')
+    (user/'config.ini').write_text('[Video]\nresolution=1280x1056\nbackend=Metal\nfullscreen=false\n[Input]\ncontroller=Pipe/0/opensmash\n')
     config = configparser.ConfigParser();config.optionxform = str
     ini = user / 'Config/Dolphin.ini';config.read(ini)
     config['Movie'] = {'DumpFrames': 'True', 'DumpFramesSilent': 'True'}

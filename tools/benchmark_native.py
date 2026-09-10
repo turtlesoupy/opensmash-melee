@@ -6,6 +6,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--app',type=Path,default=ROOT/'build/native/OpenSmash Melee.app')
     p.add_argument('--character',default='abrahamlincoln')
+    p.add_argument('--target',type=int,help='Optional bundled Melee target ID')
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--seconds',type=int,default=115)
     a=p.parse_args();out=a.output.resolve();out.mkdir(parents=True,exist_ok=False)
@@ -17,6 +18,8 @@ def main():
     if hashlib.sha256((base/'sys/main.dol').read_bytes()).hexdigest()!=build['dolSha256']:raise ValueError('Game hash mismatch')
     shutil.copytree(base,out/'game',copy_function=os.link)
     character=next(c for c in build['characters'] if c['slug']==a.character)
+    if a.target is not None and a.target!=character['fighter']:
+        character=character | next(t for t in character.get('targets',[]) if t['fighter']==a.target)
     costume=character['costumes'][0];target=out/'game/files'/costume['filename']
     target.unlink();shutil.copy2(app/'Resources'/costume['path'],target)
     user=out/'user';shutil.copytree(support/'User',user,ignore=shutil.ignore_patterns('Pipes','Dump'))
@@ -55,9 +58,9 @@ def main():
         windows.append(dict(seconds=duration,frames=len(group),fps=fps,p95=times[int(len(times)*.95)],p99=times[int(len(times)*.99)],
             meanDrawCalls=sum(float(r['draw_calls']) for r in group)/len(group),
             passes=duration>=29 and fps>=58.5 and times[int(len(times)*.95)]<=20 and times[int(len(times)*.99)]<=33.34))
-    result=dict(character=a.character,moduleSha256=build['moduleSha256'],
+    result=dict(character=a.character,target=character['fighter'],moduleSha256=build['moduleSha256'],
         engineSha256=hashlib.sha256(Path(command[0]).read_bytes()).hexdigest(),
-        costumeSha256=costume['sha256'],graphics='Metal',audio='Cubeb',window=[960,720],
+        costumeSha256=costume['sha256'],launchModSha256=hashlib.sha256((app/'Resources/Mods/opensmash_launch.mgm.dylib').read_bytes()).hexdigest(),graphics='Metal',audio='Cubeb',window=[960,720],
         capture=False,windows=windows,
         passes=len(windows)==3 and all(w['passes'] for w in windows))
     (out/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))

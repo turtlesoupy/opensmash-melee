@@ -80,7 +80,36 @@ def upgrade_presentation(ident):
     output=ROOT/"build/characters"/ident
     profile_path=output/"profile.json"
     profile=json.loads(profile_path.read_text())
-    source_hash=hashlib.sha256((str(VERSION)+digest(profile_path)+digest(character/"character.json")+
+    from opensmash_melee.target_presentation import stature, VERSION as STATURE_VERSION
+    if profile.get('stature',{}).get('version') != STATURE_VERSION:
+        from opensmash_melee.archive import Archive
+        from opensmash_melee.glb import GLB
+        from opensmash_melee.skeleton import joints
+        from opensmash_melee.retarget import conform
+        from tools.inspect_costume_bounds import inspect
+        original=ROOT/'assets/game/files'/next(output.glob('Pl*Nr.dat')).name
+        if digest(original)!=profile['costume_sha256'] or digest(character/'rigged.glb')!=profile['source_glb_sha256']:
+            raise ValueError('Stature source hash mismatch')
+        skeleton=joints(Archive.read(original),profile['symbol'])
+        fitted=conform(GLB(character/'rigged.glb').mesh(),skeleton,profile)
+        profile['stature']=stature(fitted,inspect(str(original))[0])
+        profile.setdefault('base_fighter','mario')
+        atomic_write(profile_path,(json.dumps(profile,indent=2)+'\n').encode())
+    if profile.get('base_fighter') in ('link','marth') and profile.get('attachment_version') != 8:
+        from opensmash_melee.archive import Archive
+        from opensmash_melee.glb import GLB
+        from opensmash_melee.skeleton import joints
+        from opensmash_melee.retarget import conform
+        from opensmash_melee.target_presentation import attachment_offsets, attachment_rotations
+        original=ROOT/'assets/game/files'/next(output.glob('Pl*Nr.dat')).name
+        skeleton=joints(Archive.read(original),profile['symbol'])
+        fitted=conform(GLB(character/'rigged.glb').mesh(),skeleton,profile)
+        profile['attachment_scale']=1./profile['stature']['scale']
+        profile['attachment_offsets']=attachment_offsets(fitted,skeleton,original,profile['base_fighter'],profile['attachment_scale'])
+        profile['attachment_rotations']=attachment_rotations(skeleton,original,profile['base_fighter'],profile['stature'])
+        profile['attachment_version']=8
+        atomic_write(profile_path,(json.dumps(profile,indent=2)+'\n').encode())
+    source_hash=hashlib.sha256((str(VERSION)+digest(profile_path)+digest(character/"character.json")+digest(character/"stock_raw.png")+
         digest(character/("emblem_stencil.png" if (character/"emblem_stencil.png").exists() else "emblem_raw.png"))).encode()).hexdigest()
     fitted=None
     for path in list(output.glob("Pl*Nr.dat"))+list((output/"browser").glob("Pl*Nr.dat")):

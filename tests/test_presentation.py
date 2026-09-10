@@ -46,6 +46,7 @@ class PresentationTests(unittest.TestCase):
             root=Path(tmp)
             (root/'character.json').write_text(json.dumps({'display':'Alan Turing','short':'TURING'}))
             Image.new('L',(48,48),255).save(root/'emblem_stencil.png')
+            Image.new('RGBA',(32,32),(255,0,0,255)).save(root/'stock_raw.png')
             image=panel(root)
             self.assertIsNone(image.crop((0,0,256,192)).getbbox())
             self.assertIsNotNone(image.info['emblem'].getbbox())

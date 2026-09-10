@@ -3,11 +3,24 @@ import json
 from pathlib import Path
 import struct
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 MAGIC = 0x4f535549  # OSUI; extension of our own MObjDesc, never a vanilla edit.
-VERSION = 5
+VERSION = 8
 OSBV_SIZE = 4 + 8640 + 1024 + 80 + 32 + 768 + 2304
+
+
+def stock_image(path):
+    """Apply the source stock art's chroma background before downsampling."""
+    art=Image.open(path).convert('RGBA')
+    pixels=np.array(art)
+    background=pixels[2 if art.height>2 else 0,2 if art.width>2 else 0,:3].astype(int)
+    # Existing transparent exports are already keyed; preserve them verbatim.
+    if pixels[:,:,3].min()==255 and background[1]>background[0]+40 and background[1]>background[2]+40:
+        difference=np.abs(pixels[:,:,:3].astype(int)-background).sum(axis=2)
+        pixels[difference<=110,3]=0
+        art=Image.fromarray(pixels)
+    return art
 
 
 def import_stencil(source, destination):
@@ -45,6 +58,7 @@ def panel(character):
     emblem=emblem.resize((max(1,round(emblem.width*scale)),max(1,round(emblem.height*scale))), Image.Resampling.LANCZOS)
     canvas = Image.new('L',(256,256))
     canvas.info['emblem'] = emblem
+    canvas.info['stock'] = stock_image(character/'stock_raw.png')
     font = None
     for candidate in ('/System/Library/Fonts/Supplemental/Arial Narrow Bold.ttf',
                       'DejaVuSansCondensed-Bold.ttf'):
@@ -142,11 +156,11 @@ def portrait_fit(mesh, skeleton, profile):
     return skeleton[head]['offset'],center,radius
 
 
-def attach(a, dobj, image, portrait=None):
+def attach(a, dobj, image, portrait=None, stature=None):
     old=a.ptr(dobj+8)
     if old is None: raise ValueError('Presentation needs an existing material')
     # Clone descriptor and relocation fields, preserving original GX material.
-    m=a.append(a.data[old:old+24]+bytes(44))
+    m=a.append(a.data[old:old+24]+bytes(120))
     for offset in range(0,24,4):
         if old+offset in a.relocs:a.pointer(m+offset,a.ptr(old+offset))
     pixels=a.append(i4(image),32)
@@ -173,5 +187,21 @@ def attach(a, dobj, image, portrait=None):
     if portrait:
         head,center,radius=portrait
         a.pointer(m+48,head);a.pack("4f",m+52,*center,radius)
+    stature=stature or dict(scale=1.,offset=0.)
+    a.pack('2f',m+68,stature['scale'],stature['offset'])
+    from .gx import rgba8
+    for offset,art in [(76,image.info.get('stock')), (80,image.info.get('emblem'))]:
+        if art is None:continue
+        art=art.convert('RGBA') if offset==76 else Image.merge('RGBA',(Image.new('L',art.size,255),)*3+(art,))
+        bounds=art.getbbox()
+        if bounds:art=art.crop(bounds)
+        art.thumbnail((28,28),Image.Resampling.LANCZOS)
+        canvas=Image.new('RGBA',(32,32));canvas.paste(art,((32-art.width)//2,(32-art.height)//2))
+        if offset==80:
+            outline=Image.new('RGBA',(32,32),(0,0,0,0));outline.putalpha(canvas.getchannel('A').filter(ImageFilter.MaxFilter(3)))
+            outline.alpha_composite(canvas);canvas=outline
+        pixels=a.append(rgba8(canvas),32);descriptor=a.alloc(24)
+        a.pointer(descriptor,pixels);a.pack('HHI',descriptor+4,32,32,6);a.pointer(m+offset,descriptor)
+    # m+88..135 is per-costume draw-matrix scratch, never animation state.
     a.pointer(dobj+8,m)
 

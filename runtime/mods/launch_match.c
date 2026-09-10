@@ -227,7 +227,7 @@ static unsigned costume_identity(CPUState* s, unsigned joint, unsigned depth) {
             unsigned d=read32(s,desc+16);
             for(unsigned n=0;presentation_pointer(d) && n<100;n++,d=read32(s,d+4)) {
                 unsigned m=read32(s,d+8);
-                if(presentation_pointer(m) && read32(s,m+24)==0x4f535549 && read32(s,m+28)==5)
+                if(presentation_pointer(m) && read32(s,m+24)==0x4f535549 && (read32(s,m+28)>=5 && read32(s,m+28)<=8))
                     return m;
             }
         }
@@ -329,6 +329,11 @@ static void results_portrait_camera(CPUState* s,unsigned port) {
         if(scale>max_scale)max_scale=scale;
     }
     float radius=presentation_float(s,identity+64)*sqrtf(max_scale);
+    if(read32(s,identity+28)>=6) {
+        float fit=presentation_float(s,identity+68);radius*=fit;
+        for(unsigned axis=0;axis<3;axis++)center[axis]=center[axis]*fit+(1-fit)*presentation_float(s,root+0x38+axis*4);
+        center[1]+=presentation_float(s,identity+72)*presentation_float(s,root+0x30);
+    }
     float fov=presentation_float(s,camera+0x40),aspect=presentation_float(s,camera+0x44);
     if(!(radius>.01f && radius<1000 && fov>1 && fov<150 && aspect>.1f))return;
     /* The portrait copies the central 52 pixels of the 640-wide EFB. Fit the
@@ -360,7 +365,151 @@ static void results_portrait0(CPUState* s){results_portrait_camera(s,0);}
 static void results_portrait1(CPUState* s){results_portrait_camera(s,1);}
 static void results_portrait2(CPUState* s){results_portrait_camera(s,2);}
 static void results_portrait3(CPUState* s){results_portrait_camera(s,3);}
+/* Normalize only the submitted draw matrix. Physics, hitboxes, animation
+ * state and world-space joint matrices remain the original Melee values. */
+static unsigned root_identity(CPUState* s,unsigned root) {
+    if(!presentation_pointer(root) || !(read32(s,root+0x14)&2))return 0;
+    unsigned desc=read32(s,root+0x84);
+    if(!presentation_pointer(desc))return 0;
+    unsigned d=read32(s,desc+16);
+    if(!presentation_pointer(d))return 0;
+    unsigned m=read32(s,d+8);
+    return presentation_pointer(m)&&read32(s,m+24)==0x4f535549&&(read32(s,m+28)>=6 && read32(s,m+28)<=8)?m:0;
+}
+/* Item models held by a fighter must use the same visual transform. Released
+ * projectiles retain their own world-space trajectory. */
+static unsigned held_item_roots[3], held_owner_root;
+static void held_item_end(CPUState* s) {
+    (void)s;held_owner_root=0;
+    for(unsigned i=0;i<3;i++)held_item_roots[i]=0;
+}
+static void held_item_begin(CPUState* s) {
+    held_item_end(s);
+    unsigned item=read32(s,s->gpr[3]+0x2c);if(!presentation_pointer(item))return;
+    unsigned kind=read32(s,item+0x10);
+    /* Arrow state 0 is nocked; state 1 and later are released. */
+    if(kind==64 || kind==65) {if(read32(s,item+0x24)!=0)return;}
+    else if(kind!=74 && kind!=75 && kind!=76 && kind!=77 && kind!=83)return;
+    unsigned owner=read32(s,item+0x518);if(!presentation_pointer(owner))return;
+    unsigned root=read32(s,owner+0x28);if(!root_identity(s,root))return;
+    held_item_roots[0]=read32(s,s->gpr[3]+0x28);held_owner_root=root;
+    if(kind==64 || kind==65) {
+        /* itLinkArrow draws two additional charge/trail model roots before
+         * its normal item callback (Item.xDD4.linkarrow.xB4). */
+        held_item_roots[1]=read32(s,item+0xe88);
+        held_item_roots[2]=read32(s,item+0xe8c);
+    }
+}
+/* Detached fighter animation-command effects lose their ownership after
+ * spawning. Normalize the charge flash (3F3) and directional dust (3FE). */
+static unsigned flash_owner_root, flash_kind;
+static void flash_begin(CPUState* s){
+    if(!((s->lr==0x800674F8&&s->gpr[3]==0x3F3)||(s->lr==0x80067568&&s->gpr[3]==0x3FE)))return;
+    flash_kind=s->gpr[3];
+    unsigned gobj=s->gpr[4];flash_owner_root=0;
+    if(!presentation_pointer(gobj))return;
+    unsigned root=read32(s,gobj+0x28);if(root_identity(s,root))flash_owner_root=root;
+}
+static void flash_created(CPUState* s){
+    unsigned root=flash_owner_root;flash_owner_root=0;
+    unsigned identity=root_identity(s,root);if(!identity)return;
+    unsigned gen=s->gpr[3];if(!presentation_pointer(gen))return;
+    unsigned app=read32(s,gen+0x54);
+    unsigned position_ptr=gen+0x24;
+    if(flash_kind==0x3FE){if(!presentation_pointer(app))return;position_ptr=app+8;}
+    float scale=presentation_float(s,identity+68),offset=presentation_float(s,identity+72);
+    for(unsigned axis=0;axis<3;axis++){
+        float origin=presentation_float(s,root+0x38+axis*4);
+        float position=origin+scale*(presentation_float(s,position_ptr+axis*4)-origin);
+        if(axis==1)position+=offset*presentation_float(s,root+0x30);
+        presentation_write_float(s,position_ptr+axis*4,position);
+        if(flash_kind==0x3FE)presentation_write_float(s,app+0x24+axis*4,presentation_float(s,app+0x24+axis*4)*scale);
+    }
+}
+static void flash_return_patch(CPUState* s){
+    flash_created(s);
+    /* Both verified GALE01 return sites branch to 800675F8. */
+    s->pc=0x800675F8;
+}
+static void normalized_draw(CPUState* s) {
+    unsigned root=s->gpr[3],identity=root_identity(s,root);
+    if(!identity && root && (root==held_item_roots[0]||root==held_item_roots[1]||root==held_item_roots[2])) {root=held_owner_root;identity=root_identity(s,root);}
+    if(!identity)return;
+    float scale=presentation_float(s,identity+68),offset=presentation_float(s,identity+72);
+    if(!isfinite(scale)||scale<.2f||scale>3.f)return;
+    unsigned view=s->gpr[4];
+    if(!view) {unsigned camera=read32(s,0x804D765C);if(!presentation_pointer(camera))return;view=camera+0x54;}
+    if(!presentation_pointer(view))return;
+    float shift[3];
+    for(unsigned axis=0;axis<3;axis++)shift[axis]=(1-scale)*presentation_float(s,root+0x38+axis*4);
+    shift[1]+=offset*presentation_float(s,root+0x30);
+    unsigned dest=identity+88;
+    for(unsigned row=0;row<3;row++) {
+        float translation=presentation_float(s,view+row*16+12);
+        for(unsigned col=0;col<3;col++) {
+            float value=presentation_float(s,view+row*16+col*4);
+            translation+=value*shift[col];
+            presentation_write_float(s,dest+row*16+col*4,value*scale);
+        }
+        presentation_write_float(s,dest+row*16+12,translation);
+    }
+    s->gpr[4]=dest;
+    static unsigned reported; if(!reported){reported=identity;fprintf(stderr,"[opensmash] stature scale=%.4f offset=%.4f root=%08x\n",scale,offset,root);}
+}
+static void normalized_draw_patch(CPUState* s) {
+    normalized_draw(s);
+    /* Verified GALE01 1.02 entry instruction: mflr r0 (7c0802a6).
+     * A patch is required: observational hooks restore register arguments. */
+    s->gpr[0]=s->lr;s->pc=0x803709E0;
+}
+static unsigned player_identity(CPUState* s,unsigned port) {
+    unsigned player=0x80453080+port*0xe90;
+    unsigned transformed=moderngekko_mod_read(s,player+0xc,1);if(transformed>1)return 0;
+    unsigned fighter=read32(s,player+0xb0+transformed*4);
+    if(!presentation_pointer(fighter))return 0;
+    return root_identity(s,read32(s,fighter+0x28));
+}
+static void stock_identity(CPUState* s) {
+    unsigned data=read32(s,s->gpr[3]+0x2c);
+    if(!presentation_pointer(data))return;
+    unsigned port=moderngekko_mod_read(s,data,1);if(port>=6)return;
+    unsigned identity=player_identity(s,port);if(!identity)return;
+    unsigned image=read32(s,identity+80);
+    if(!presentation_pointer(image))image=read32(s,identity+76);
+    if(!presentation_pointer(image))return;
+    for(unsigned i=1;i<=7;i++) {
+        unsigned joint=read32(s,0x804A1378+8+port*0x50+4+i*4);
+        if(!presentation_pointer(joint))continue;
+        unsigned d=read32(s,joint+0x18);if(!presentation_pointer(d))continue;
+        unsigned m=read32(s,d+8);if(!presentation_pointer(m))continue;
+        unsigned t=read32(s,m+8);if(!presentation_pointer(t))continue;
+        moderngekko_mod_write(s,t+88,image,4);
+    }
+    static unsigned reported[6];
+    if(reported[port]!=identity){reported[port]=identity;fprintf(stderr,"[opensmash] stock identity port=%u descriptor=%08x\n",port,identity);}
+}
+static void damage_emblem(CPUState* s) {
+    for(unsigned port=0;port<6;port++) {
+        if(read32(s,0x804A10C8+port*0x64+4)!=s->gpr[3])continue;
+        unsigned identity=player_identity(s,port);if(!identity)return;
+        unsigned joint=read32(s,s->gpr[3]+0x28);if(!presentation_pointer(joint))return;
+        joint=read32(s,joint+0x10);if(!presentation_pointer(joint))return;
+        unsigned d=read32(s,joint+0x18);if(!presentation_pointer(d))return;
+        unsigned m=read32(s,d+8);if(!presentation_pointer(m))return;
+        unsigned t=read32(s,m+8);if(!presentation_pointer(t))return;
+        unsigned image=read32(s,identity+80);if(!presentation_pointer(image))return;
+        moderngekko_mod_write(s,t+88,image,4);
+        return;
+    }
+}
 static const ModernGekkoModHook hooks[] = {
+    RECOMP_HOOK(0x8005FDDC, flash_begin),
+    RECOMP_HOOK(0x802A7D8C, held_item_begin),
+    RECOMP_HOOK_RETURN(0x802A7D8C, held_item_end),
+    RECOMP_HOOK(0x8026EECC, held_item_begin),
+    RECOMP_HOOK_RETURN(0x8026EECC, held_item_end),
+    RECOMP_HOOK(0x802F94E0, stock_identity),
+    RECOMP_HOOK(0x802F5E50, damage_emblem),
     RECOMP_HOOK(0x80179D3C, results_portrait0),
     RECOMP_HOOK(0x80179D60, results_portrait1),
     RECOMP_HOOK(0x80179D84, results_portrait2),
@@ -378,6 +527,9 @@ static const ModernGekkoModHook hooks[] = {
     RECOMP_HOOK(0x80388278, report_assert),
 };
 static const ModernGekkoModPatch patches[] = {
+    RECOMP_PATCH(0x800674F8, flash_return_patch),
+    RECOMP_PATCH(0x80067568, flash_return_patch),
+    RECOMP_PATCH(0x803709DC, normalized_draw_patch),
     RECOMP_PATCH(0x801A42F8, change_mode),
     RECOMP_PATCH(0x801A55EC, vs_on_load),
 };
@@ -390,7 +542,7 @@ static const ModernGekkoModDesc descriptor = {
     .version = "0.1.0",
     .display_name = "OpenSmash match launch (USA 1.02)",
     .patches = patches,
-    .num_patches = 2,
+    .num_patches = sizeof(patches)/sizeof(patches[0]),
     .hooks = hooks,
     .num_hooks = sizeof(hooks)/sizeof(hooks[0]),
     .on_load = on_load,

@@ -154,9 +154,15 @@ def replace_costume(archive, mesh, skeleton, profile):
                 selected = d
             # Keep every DObj and its material descriptor alive for fighter
             # material/visibility tables; suppress only its original geometry.
-            archive.pointer(d+12,None)
+            from .target_presentation import ATTACHMENTS
+            if j['index'] not in ATTACHMENTS.get(profile.get('base_fighter'), []):
+                archive.pointer(d+12,None)
             d = archive.ptr(d+4)
             index += 1
+    from .target_presentation import transform_rigid_attachment, attachment_transform
+    for index in ATTACHMENTS.get(profile.get('base_fighter'), []):
+        transform=attachment_transform(skeleton,profile.get('base_fighter'),index,profile)
+        transform_rigid_attachment(archive,skeleton[index],[0.,0.,0.],transform=transform)
     if selected is None:
         raise ValueError('mesh_dobj does not exist on mesh_joint')
     if profile.get('browser_skinning'):
@@ -168,7 +174,7 @@ def replace_costume(archive, mesh, skeleton, profile):
     archive.pointer(selected+8,material(archive,mesh['image']))
     if "presentation" in mesh:
         from .presentation import attach, portrait_fit
-        attach(archive,selected,mesh["presentation"],portrait_fit(mesh,skeleton,profile))
+        attach(archive,selected,mesh["presentation"],portrait_fit(mesh,skeleton,profile),profile.get("stature"))
     # Preserve all skeleton flags; enable normals for the custom model owner.
     archive.pack('I',owner['offset']+4,owner['flags'] | 0x80)
     return dict(vertices=len(mesh['positions']),triangles=len(mesh['triangles']),

@@ -194,3 +194,33 @@ python3 tools/test_native_targets.py --app 'build/native/OpenSmash Melee.app' \
 ```
 
 These are native launcher controls; the web roster's assignment is unchanged.
+
+### Retarget presentation validation
+
+Costume exports now record a measured uniform stature fit against the verified
+original target costume. The render transform preserves the source character's
+head/body proportions and ground baseline. It does not alter Melee's physics,
+hitboxes, or animation. Link and Marth retain their original weapon DObjs and
+visibility tables. Rigid weapons retain their native world size independently
+of the body fit. Link's held shield clearance is measured against the custom
+forearm; the stowed shield, sheath, and sword move together as one back assembly
+with clearance for the torso and head. Marth's sword and scabbard receive a
+measured outward rotation around the original grip and belt mounts, preserving
+native equipment size and the original idle floor spacing relative to the custom
+body height. The blade follows the hilt as one assembly. Position and normal
+arrays are cloned per attachment,
+preserving shared originals, weapon materials, and animation joints. Held bows, blasters, and Mario's cape follow the same visual
+transform, including nocked arrows and their charge visuals; released projectiles
+retain their world trajectories. The stature rule is shared across all bundled
+characters and target variants, not a Lincoln-specific scale table.
+
+Custom OpenSmash emblems supply both combat stock icons and damage-panel marks.
+The stock texture has transparent padding and an outline for bright stages.
+Results portrait framing accounts for the uniform stature transform.
+
+`tools/verify_target_assets.py` checks every bundled variant's stature metadata,
+icon alpha, retained weapon geometry, and uniform weapon transforms. `tools/validate_retargets.py`
+compares custom/original fighters on Final Destination with a fixed camera;
+`--action` drives real controller inputs and checks damage and stock loss.
+Its frame-dumping captures are for visual review, not FPS measurements. Use
+`tools/benchmark_native.py --target 6` for capture-free combat timing.
