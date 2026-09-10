@@ -62,6 +62,7 @@ set_target_properties(opensmash-web PROPERTIES SUFFIX ".js")
 set(OPENSMASH_WASM_LINK_OPT "-O1" CACHE STRING "Wasm optimization for development links")
 target_link_options(opensmash-web PRIVATE
   ${OPENSMASH_WASM_LINK_OPT}
+  --emit-symbol-map
   "SHELL:--pre-js ${OPENSMASH_WEB_SOURCE}/register_canvas.js"
   -pthread -sPROXY_TO_PTHREAD=1 -sPTHREAD_POOL_SIZE=8
   -sINITIAL_MEMORY=536870912 -sMAXIMUM_MEMORY=2147483648 -sALLOW_MEMORY_GROWTH=1

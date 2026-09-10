@@ -213,3 +213,55 @@ The script creates an isolated profile, clicks immediately, measures first and
 repeat visits, and closes its own browser. It never clears the user's profile.
 On macOS with AeroSpace, `OPENSMASH_FOCUS_TEST_WINDOW=1` focuses the test window
 without modifying configuration. Local evidence: `build/browser-startup-fix/turing-final/`.
+
+## Runtime hook lookup investigation (September 9)
+
+A matching optimized Wasm build (`f66d784d75389014`) and Chrome CPU trace
+identified the bridge's `host_call` and `host_call_contains` lambdas as the
+largest individual self-time contributors: 2.566 and 1.481 seconds respectively
+in a 30-second sampling interval. That is about 13.5% of sampled wall time on
+the emulation thread, not a claim of an equivalent end-to-end speedup. The last
+900 instrumented frames averaged 107,739 native dispatches per frame, 20.52 ms
+per frame, 0.43 ms presentation, and 0.006 ms throttle sleep. Profiler overhead
+and uncontrolled machine load limit direct comparisons with unprofiled runs.
+
+The bridge now builds a read-only 128 KiB instruction-membership bitmap before
+starting emulation. Misses avoid scanning all patches/hooks; actual hits retain
+the original callbacks, ordering, register restoration, and patch behavior.
+Out-of-text addresses and range queries use the sorted address list. Once normal
+pacing is restored, callbacks also stop querying destination readiness. This
+changes browser bridge overhead only, not game timing or character geometry.
+
+Optimized browser builds now emit `opensmash-web.js.symbols` for Chrome's numeric
+Wasm stack frames. Always retain the map with the exact profiled build: adding
+the map changed function numbering, so older traces cannot use the new map.
+Local named profile evidence: `build/browser-runtime-profile/named/`.
+
+The lookup test checks every aligned instruction across the bitmap, duplicates,
+unaligned and out-of-range addresses, empty indexes, and exclusive range ends:
+
+```sh
+c++ -std=c++17 -O2 tests/browser_hook_index.cpp -o /tmp/opensmash-hook-index-test
+/tmp/opensmash-hook-index-test
+```
+
+The unprofiled retest of build `92217e510d206c5d`, using a fresh headed and
+focused Chrome profile with Turing/Mario against Peach on Battlefield, passed
+all four recorded combat windows:
+
+| Visit | Window | FPS | p95 ms | p99 ms | Audio underrun samples |
+| --- | --- | --- | --- | --- | --- |
+| First | 1 | 59.63 | 18.160 | 26.084 | 0 |
+| First | 2 | 59.93 | 16.820 | 17.360 | 0 |
+| Repeat | 1 | 59.80 | 16.900 | 17.159 | 0 |
+| Repeat | 2 | 59.90 | 16.829 | 18.625 | 0 |
+
+The first displayed FPS arrived 10.22 seconds after clicking on the first visit
+and 5.10 seconds on repeat. The first complete startup interval measured 57.31
+FPS with zero underruns; the repeat began at 59.95 FPS. The first screenshot
+confirms a full-stock match at 8:00. The test closed its isolated browser afterward.
+Evidence, including per-second samples, screenshots, build identity in runtime
+traces and summarized windows: `build/browser-runtime-profile/lookup-validation/`.
+This validates this two-player matchup on this machine, not every roster/stage,
+four-player performance, or a perceptual audio certification. Only browser
+profile storage was cold; server assets and driver caches were not reset.

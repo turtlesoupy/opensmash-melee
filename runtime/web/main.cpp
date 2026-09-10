@@ -11,6 +11,8 @@
 #include "Core/Config/MainSettings.h"
 #include "Common/Config/Config.h"
 #include "Core/Core.h"
+#include "hook_index.h"
+static BrowserHookIndex hook_index;
 static std::atomic<unsigned> frame_count{0};
 static std::atomic<unsigned> intervals[4096]{};
 extern "C" int opensmash_destination_ready();
@@ -52,22 +54,29 @@ int main(int argc, char** argv)
   }
   if (argc > 8 && std::string(argv[8]) == "1") setenv("OPENSMASH_WAIT_SELECTION", "1", 1);
   mod->on_load(nullptr);
+  hook_index.add(0x8036E83Cu);
+  hook_index.add(0x80074048u);
+  for (unsigned i = 0; i < mod->num_patches; ++i) hook_index.add(mod->patches[i].address);
+  for (unsigned i = 0; i < mod->num_hooks; ++i) hook_index.add(mod->hooks[i].address);
+  hook_index.finish();
   config.module.host_call_user = const_cast<ModernGekkoModDesc*>(mod);
   config.module.host_call = [](CPUState* state, unsigned address, void* user) {
     if (address == 0x8036E83Cu || address == 0x80074048u) return opensmash_skinning(state);
     const auto* desc = static_cast<ModernGekkoModDesc*>(user);
-    for (unsigned i = 0; i < desc->num_patches; ++i)
-      if (desc->patches[i].address == address) {
-        desc->patches[i].function(state);
-        return true;
-      }
-    for (unsigned i = 0; i < desc->num_hooks; ++i)
-      if (desc->hooks[i].address == address) {
-        CPUState saved = *state;
-        desc->hooks[i].function(state);
-        *state = saved;
-      }
-    if (opensmash_destination_ready() && !combat_pacing_restored) {
+    if (hook_index.contains(address)) {
+      for (unsigned i = 0; i < desc->num_patches; ++i)
+        if (desc->patches[i].address == address) {
+          desc->patches[i].function(state);
+          return true;
+        }
+      for (unsigned i = 0; i < desc->num_hooks; ++i)
+        if (desc->hooks[i].address == address) {
+          CPUState saved = *state;
+          desc->hooks[i].function(state);
+          *state = saved;
+        }
+    }
+    if (!combat_pacing_restored && opensmash_destination_ready()) {
       Core::SetIsThrottlerTempDisabled(false);
       combat_pacing_restored = true;
       std::fprintf(stderr, "[opensmash] normal destination pacing restored\n");
@@ -75,23 +84,10 @@ int main(int argc, char** argv)
     return false;
   };
   config.module.host_call_contains = [](unsigned address, void* user) {
-    if (address == 0x8036E83Cu || address == 0x80074048u) return true;
-    const auto* desc = static_cast<ModernGekkoModDesc*>(user);
-    for (unsigned i = 0; i < desc->num_patches; ++i)
-      if (desc->patches[i].address == address) return true;
-    for (unsigned i = 0; i < desc->num_hooks; ++i)
-      if (desc->hooks[i].address == address) return true;
-    return false;
+    return hook_index.contains(address);
   };
   config.module.host_call_range_contains = [](unsigned begin, unsigned end, void* user) {
-    if (begin <= 0x8036E83Cu && end > 0x8036E83Cu) return true;
-    if (begin <= 0x80074048u && end > 0x80074048u) return true;
-    const auto* desc = static_cast<ModernGekkoModDesc*>(user);
-    for (unsigned i = 0; i < desc->num_patches; ++i)
-      if (desc->patches[i].address >= begin && desc->patches[i].address < end) return true;
-    for (unsigned i = 0; i < desc->num_hooks; ++i)
-      if (desc->hooks[i].address >= begin && desc->hooks[i].address < end) return true;
-    return false;
+    return hook_index.intersects(begin, end);
   };
   std::error_code error;
   std::filesystem::create_directories(config.user_directory / "Config", error);
