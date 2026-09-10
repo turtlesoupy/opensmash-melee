@@ -5,6 +5,7 @@ const fs = require("node:fs"),
   path = require("node:path");
 let window,
   backend,
+  surface,
   origin,
   quitting = false;
 const token = randomBytes(32).toString("hex");
@@ -24,7 +25,7 @@ async function startBackend() {
     exe,
     [...args, "--desktop", app.getPath("userData"), "--resources", resources],
     {
-      env: { ...process.env, OPENSMASH_DESKTOP_TOKEN: token },
+      env: { ...process.env, ...surface?.environment, OPENSMASH_DESKTOP_TOKEN: token },
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     },
@@ -79,6 +80,7 @@ else
   app.whenReady().then(async () => {
     fs.mkdirSync(app.getPath("userData"), { recursive: true });
     try {
+      surface = require("./surface.cjs")(app.getPath("userData"));
       origin = await startBackend();
       session.defaultSession.webRequest.onBeforeSendHeaders(
         { urls: [origin + "/*"] },
@@ -103,6 +105,12 @@ else
           nodeIntegration: false,
         },
       });
+      surface?.attach(window);
+      for (const event of ["enter-full-screen", "leave-full-screen"]) {
+        window.on(event, () =>
+          window.webContents.send("melee:fullscreen-state", window.isFullScreen()),
+        );
+      }
       window.webContents.setWindowOpenHandler(({ url }) => {
         try {
           const u = new URL(url);
@@ -123,6 +131,33 @@ else
           throw Error("Invalid desktop caller.");
       }
       const preferencesPath = path.join(app.getPath("userData"), "launcher-preferences.json");
+      ipcMain.on("melee:surface-ready", (event, ready) => {
+        validateCaller(event);
+        surface?.ready(ready === true);
+      });
+      ipcMain.on("melee:frame-ack", (event, id) => {
+        validateCaller(event);
+        surface?.ack?.(id);
+      });
+      ipcMain.on("melee:input", (event, code, down) => {
+        validateCaller(event);
+        if (code === null) surface?.clearInput();
+        else if (typeof code === "string" && typeof down === "boolean") surface?.input(code, down);
+      });
+      ipcMain.handle("melee:fullscreen", (event, value) => {
+        validateCaller(event);
+        window.setFullScreen(typeof value === "boolean" ? value : !window.isFullScreen());
+      });
+      window.webContents.on("before-input-event", (event, input) => {
+        if (
+          input.type === "keyDown" &&
+          !input.isAutoRepeat &&
+          (input.key === "F11" || (input.key === "Escape" && window.isFullScreen()))
+        ) {
+          event.preventDefault();
+          window.setFullScreen(input.key === "F11" ? !window.isFullScreen() : false);
+        }
+      });
       let preferences = {};
       try {
         preferences = JSON.parse(fs.readFileSync(preferencesPath, "utf8"));
@@ -193,6 +228,7 @@ app.on("before-quit", (event) => {
     .catch(() => {})
     .finally(() => {
       backend?.kill();
+      surface?.close();
       app.exit();
     });
 });

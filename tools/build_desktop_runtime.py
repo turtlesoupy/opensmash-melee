@@ -24,6 +24,12 @@ def build(inputs, out):
         ):
             raise ValueError("Build input integrity failure: " + name)
     runtime = source / "runtime"
+    from build_native import apply_native_patches
+    # Immutable desktop inputs already contain the earlier native patches plus
+    # platform fixes. Reversing that history would undo those platform fixes.
+    apply_native_patches(runtime, [ROOT / "runtime/patches/native" / name for name in [
+        "keyboard-no-beep.patch", "zz-electron-embedded.patch"
+    ]])
     host = ROOT / "build/desktop-runtime-host"
     module = ROOT / "build/desktop-runtime-module"
     # Apple SDKs before Xcode 26 lack std::jthread. Keep identical cooperative
@@ -127,9 +133,12 @@ def build(inputs, out):
         "dolrecomp",
         "opensmash-launch",
         "opensmash-controllers",
+        "opensmash-embedded-test",
         "-j",
         jobs,
     )
+    input_test = host / ("opensmash-embedded-test.exe" if os.name == "nt" else "opensmash-embedded-test")
+    run(input_test, host / "embedded-input-test.bin")
     run(
         "cmake",
         "-S",
@@ -223,6 +232,7 @@ def build(inputs, out):
                 "protocol": 1,
                 "platform": sys.platform,
                 "architecture": platform.machine(),
+                "embeddedSurfaces": ["rgba-memory-v1"] + (["iosurface-v1"] if sys.platform == "darwin" else []),
                 "sha256": hashes,
                 **paths,
             },

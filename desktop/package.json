@@ -10,11 +10,15 @@
   "scripts": {
     "dev": "electron .",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder --publish never"
+    "dist": "electron-builder --publish never",
+    "predev": "node build-surface.cjs",
+    "prepack": "node build-surface.cjs",
+    "predist": "node build-surface.cjs"
   },
   "devDependencies": {
     "electron": "44.3.0",
-    "electron-builder": "26.15.3"
+    "electron-builder": "26.15.3",
+    "node-gyp": "12.4.0"
   },
   "build": {
     "appId": "fun.smash.melee",
@@ -25,7 +29,10 @@
     "files": [
       "main.cjs",
       "preload.cjs",
-      "package.json"
+      "package.json",
+      "surface.cjs",
+      "frame.cjs",
+      "native/build/Release/surface.node"
     ],
     "extraResources": [
       {
@@ -71,6 +78,9 @@
       ],
       "category": "Game"
     },
-    "artifactName": "OpenSmash-Melee-${version}-${os}-${arch}.${ext}"
+    "artifactName": "OpenSmash-Melee-${version}-${os}-${arch}.${ext}",
+    "asarUnpack": [
+      "native/build/Release/*.node"
+    ]
   }
 }

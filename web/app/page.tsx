@@ -1,3 +1,4 @@
+import Controls from "./Controls";
 import {preferences} from '@/lib/desktop';
 import { useEffect, useMemo, useRef, useState } from "react";
 import Game from "./Game";
@@ -249,31 +250,7 @@ export default function Home() {
               </button>
             </>
           )}
-          {dialog === "Controls" && (
-            <>
-              <p>Choose any fighter to play. Use Settings to assign up to four player ports.</p>
-              <dl className="controls-list">
-                {[
-                  ["Move", "WASD / arrow keys"],
-                  ["Attack / confirm", "J"],
-                  ["Special", "K"],
-                  ["Jump", "I / Space"],
-                  ["Shield", "Q / E"],
-                  ["Grab", "U"],
-                  ["Start / pause", "Enter"],
-                ].map(([action, key]) => (
-                  <div key={action}>
-                    <dt>{action}</dt>
-                    <dd>{key}</dd>
-                  </div>
-                ))}
-              </dl>
-              <p>
-                Gamepads: left stick to move, A attack, B special, X/Y jump, shoulder buttons
-                shield. Touch controls appear on touch devices.
-              </p>
-            </>
-          )}
+          {dialog === "Controls" && <Controls />}
           {dialog === "About" && (
             <>
               <p>

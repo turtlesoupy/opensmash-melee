@@ -52,7 +52,7 @@ class NativeService:
             "ready": running and ready,
             "exitCode": self.process.poll() if self.process else None,
             "message": (
-                "Game is running in its native window."
+                ("Game is running." if os.environ.get("OPENSMASH_INPUT_FILE") else "Game is running in its native window.")
                 if running and ready
                 else "Starting Melee…" if running else self.status_message
             ),
@@ -202,12 +202,15 @@ class NativeService:
             "Triggers/R": "E",
         }
         # Dolphin's backend key names differ even for Return/Space and arrows.
-        if os.name == "nt":
+        embedded = bool(os.environ.get("OPENSMASH_INPUT_FILE"))
+        if embedded:
+            keyboard = "OpenSmash/0/Keyboard"
+        if os.name == "nt" and not embedded:
             keyboard_bind["Buttons/Start"] = "RETURN"
             keyboard_bind["Buttons/X"] = "U | SPACE"
-        elif sys.platform.startswith("linux"):
+        elif sys.platform.startswith("linux") and not embedded:
             keyboard_bind["Buttons/X"] = "U | space"
-        if sys.platform != "darwin":
+        if sys.platform != "darwin" and not embedded:
             for direction in ["Up", "Down", "Left", "Right"]:
                 keyboard_bind["C-Stick/" + direction] = (
                     direction.upper() if os.name == "nt" else direction
@@ -280,6 +283,10 @@ class NativeService:
 
     def launch(self, plan):
         with self.lock:
+            transport = ("iosurface-v1" if os.environ.get("OPENSMASH_SURFACE_SERVICE") else
+                         "rgba-memory-v1" if os.environ.get("OPENSMASH_FRAME_FILE") else None)
+            if transport and transport not in self.manifest.get("embeddedSurfaces", []):
+                raise ValueError("This runtime needs the embedded-display update. Rebuild the desktop native runtime.")
             session = plan.get("session") if isinstance(plan, dict) else None
             if not isinstance(session, str) or not re.fullmatch(
                 r"[a-f0-9-]{36}", session

@@ -18,7 +18,7 @@ jobs:
       - id: inputs
         env: {GH_TOKEN: '${{ github.token }}'}
         run: |
-          if ! gh release view desktop-runtime-v1 --json assets > /tmp/runtime-assets.json; then
+          if ! gh release view desktop-runtime-v3 --json assets > /tmp/runtime-assets.json; then
             echo 'ready=false' >> "$GITHUB_OUTPUT"
             echo '::notice::Native runtime cache is not published yet. Run this workflow after the initial runtime build.'
             exit 0
@@ -52,7 +52,7 @@ jobs:
         env: {GH_TOKEN: '${{ github.token }}'}
         run: |
           test '${{ github.event.repository.private }}' = 'true'
-          gh release download desktop-runtime-v1 --pattern native-runtime-${{ matrix.key }}.zip --dir build/desktop-inputs
+          gh release download desktop-runtime-v3 --pattern native-runtime-${{ matrix.key }}.zip --dir build/desktop-inputs
           gh release download desktop-characters-v1 --pattern characters.tar.gz --dir build/desktop-inputs
           python tools/prepare_desktop_release.py build/desktop-inputs/native-runtime-${{ matrix.key }}.zip build/desktop-inputs/characters.tar.gz
       - name: Build shared UI and freeze local service

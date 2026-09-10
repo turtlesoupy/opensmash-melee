@@ -39,6 +39,7 @@ export default function BootScreen({settings,onChange,onReady,onSettings}:{setti
   <div className="boot-heading"><h2>How do you want to play?</h2><button className="retro-site-link" onClick={onSettings}>Players & rules</button></div>
   <label>Start in<select aria-label="Start in" value={settings.mode} onChange={e=>onChange({...settings,mode:+e.target.value})}>{schema.modes.map(m=><option key={m.id} value={m.id}>{m.id===3?'Classic character select':m.id===4?'Original title & all modes':m.label}</option>)}</select></label>
   <p>{descriptions[settings.mode]} Choose a character below to launch.</p>
+  {settings.mode !== 0 && <p>Want to play immediately? <button className="retro-site-link" onClick={()=>onChange({...settings,mode:0})}>Start a Free-for-All instead</button></p>}
   <div className="boot-disc">
    <p role="status">{transfer!==null?`Copying and checking disc… ${Math.round(transfer*100)}%`:setup.message}</p>
    {busy&&<progress aria-label="Disc setup progress" {...(transfer!==null?{value:transfer,max:1}:{})}/>}

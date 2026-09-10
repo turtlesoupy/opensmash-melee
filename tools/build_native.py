@@ -51,10 +51,10 @@ def run(*args):
     subprocess.run([str(a) for a in args], check=True, cwd=ROOT)
 
 
-def apply_native_patches(runtime):
+def apply_native_patches(runtime, patches=None):
     # Patches may build on earlier patches in the same file. Stage the complete
     # series before changing the checkout, preserving unrelated upstream edits.
-    patches=sorted((ROOT / 'runtime/patches/native').glob('*.patch'))
+    patches=sorted((ROOT / 'runtime/patches/native').glob('*.patch')) if patches is None else patches
     names={line[6:] for patch in patches for line in patch.read_text().splitlines() if line.startswith('+++ b/')}
     with tempfile.TemporaryDirectory(prefix='opensmash-native-patches-') as directory:
         stage=Path(directory)

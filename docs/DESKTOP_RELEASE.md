@@ -5,6 +5,35 @@ is a thin Electron shell: a native disc picker, an isolated renderer, and proces
 lifetime management. The local Python service owns ISO verification, conversions,
 and launching the game. No platform-specific UI is needed for roster or mode edits.
 
+## Embedded native gameplay
+
+Desktop gameplay stays inside Electron on macOS, Windows, and Linux. The game
+engine remains native. The game toolbar toggles fullscreen; F11 toggles it and
+Escape exits it. Returning to the roster stops the engine and clears keyboard
+state. Keyboard input follows canvas focus; gamepads retain the native SDL path.
+
+macOS uses three shared IOSurface GPU textures. A texture is reused only after
+Electron releases every GPU reference. Windows/Linux render Vulkan into an
+offscreen framebuffer and transfer uncompressed RGBA frames through a bounded
+shared-memory queue. This portable path incurs GPU readback and upload costs;
+it does not use video encoding or a browser game runtime. It creates no native
+game window, including under Wayland. Both paths render at 960×720 and preserve
+the game aspect ratio when the launcher resizes.
+
+The updated runtime advertises `embeddedSurfaces` in `runtime.json`. Old runtime
+payloads fail with an update message instead of opening another window. Build
+and publish a new `desktop-runtime-v3` cache before packaging releases. The app
+packaging scripts build the macOS N-API bridge automatically. For a local
+portable-path check on macOS, set `OPENSMASH_FRAME_TRANSPORT=memory` when launching.
+
+Checks: `node --test tests/embedded_frame.cjs` verifies ordering, backpressure,
+and input cleanup. Native runtime builds run `opensmash-embedded-test` on every
+platform to check shared mappings and keyboard pulses. Local validation covered
+Metal/IOSurface and the portable path with Metal and Vulkan/MoltenVK, fullscreen,
+return to roster, and relaunch. The shared-memory test also ran on Linux and
+cross-compiled for Windows. Actual Windows/Linux gameplay and gamepads still need
+platform validation; the macOS results do not certify those drivers or performance.
+
 ## Frequent launcher changes
 
 Install `desktop/requirements.txt`, run `npm --prefix web ci` and
@@ -25,7 +54,7 @@ resources. Replacing an app does not overwrite those folders.
 
 - `desktop-runtime.yml`: manually builds the native engine, generated game module,
   extraction tool and controller helper for macOS Apple Silicon/Intel, Windows
-  x64 and Linux x64. Its private `desktop-runtime-v1` release is the engine cache.
+  x64 and Linux x64. Its private `desktop-runtime-v3` release is the engine cache.
 - `desktop-characters-v1`: one shared generated character source library. It
   includes 1,063 complete entries; four incomplete local entries are excluded.
   It excludes original source photos and prompts.

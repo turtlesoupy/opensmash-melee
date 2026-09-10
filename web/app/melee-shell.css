@@ -362,3 +362,21 @@ select {
 .boot-disc progress {width:100%;accent-color:#e9c777;}
 .boot-disc [role=alert] {color:#ffb49a;}
 .intro-video-frame:has(.boot-screen) {aspect-ratio:auto;height:auto;}
+
+.native-game { padding: 16px; color: #fff2d6; }
+.intro-video-frame:has(.native-game) { aspect-ratio: auto; height: auto; max-height: none; }
+.native-game-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.native-game-toolbar h2 { margin: 0; }
+.native-game-toolbar > div { display: flex; gap: 8px; }
+.native-game-toolbar button { background: #291b12; color: #fff2d6; border: 1px solid #86613b; padding: 8px 12px; cursor: pointer; }
+.native-game-screen { position: relative; background: #000; display: flex; justify-content: center; }
+.native-game-screen canvas { display: block; width: 100%; max-height: calc(100vh - 180px); object-fit: contain; aspect-ratio: 4 / 3; outline-offset: -2px; }
+.native-game-message { position: absolute; top: 45%; left: 0; right: 0; text-align: center; }
+.is-native-fullscreen .native-game { position: fixed; inset: 0; z-index: 10000; background: #0c0905; display: flex; flex-direction: column; }
+.is-native-fullscreen:has(.native-game) { overflow: hidden; }
+html:has(.is-native-fullscreen .native-game) { overflow: hidden; }
+.is-native-fullscreen .intro-video-frame:has(.native-game) { contain: none; isolation: auto; overflow: visible; }
+.is-native-fullscreen .native-game-screen { flex: 1; min-height: 0; }
+.is-native-fullscreen .native-game-screen canvas { height: 100%; max-height: none; }
+.is-native-fullscreen .native-game > p,
+.is-native-fullscreen .native-game > details { display: none; }

@@ -33,3 +33,5 @@ __pycache__/
 *.webm
 /desktop/node_modules/
 /desktop/dist/
+/desktop/native/build/
+*.node

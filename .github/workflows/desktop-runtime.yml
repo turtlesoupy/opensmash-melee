@@ -88,4 +88,4 @@ jobs:
         with: {path: build/runtime-artifacts, merge-multiple: true}
       - name: Publish private runtime cache
         env: {GH_TOKEN: '${{ github.token }}'}
-        run: gh release create desktop-runtime-v1 build/runtime-artifacts/*.zip --prerelease --title 'Desktop runtime v1 (internal)' --notes 'Versioned native engine payloads. No ISO or extracted game filesystem. Reused by desktop launcher builds.'
+        run: gh release create desktop-runtime-v3 build/runtime-artifacts/*.zip --prerelease --title 'Desktop runtime v3 (embedded display)' --notes 'Versioned native engine payloads. No ISO or extracted game filesystem. Reused by desktop launcher builds.'

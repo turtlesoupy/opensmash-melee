@@ -1,5 +1,9 @@
 export type DesktopBridge = {
   protocol: 1;
+  embedded: boolean;
+  setGameActive: (active: boolean) => void;
+  input: (code: string | null, down: boolean) => void;
+  fullscreen: (value?: boolean) => Promise<void>;
   storage: Pick<Storage, "getItem" | "setItem" | "removeItem">;
   chooseDisc: () => Promise<{ cancelled?: boolean; accepted?: boolean }>;
 };

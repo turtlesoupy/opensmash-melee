@@ -1,4 +1,7 @@
 # Included after ModernGekko's targets; no launcher UI code is compiled here.
+add_executable(opensmash-embedded-test "${OPENSMASH_DESKTOP_SOURCE}/../tests/embedded_memory.cpp")
+target_include_directories(opensmash-embedded-test PRIVATE "${OPENSMASH_NATIVE_SOURCE}/native")
+target_compile_features(opensmash-embedded-test PRIVATE cxx_std_20)
 add_executable(opensmash-controllers "${OPENSMASH_DESKTOP_SOURCE}/controllers.cpp")
 if(TARGET SDL3-static)
  target_link_libraries(opensmash-controllers PRIVATE SDL3-static)

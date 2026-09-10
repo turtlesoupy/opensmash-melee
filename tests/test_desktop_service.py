@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 from types import SimpleNamespace
 from opensmash_melee.native_service import NativeService
 
@@ -70,6 +71,11 @@ class DesktopServiceTests(unittest.TestCase):
             self.service.launch(
                 {**self.plan, "session": "00000000-0000-0000-0000-000000000001"}
             )
+
+    def test_embedded_launch_rejects_old_runtime_before_spawning_window(self):
+        with patch.dict("os.environ", {"OPENSMASH_SURFACE_SERVICE": "test-surface"}):
+            with self.assertRaisesRegex(ValueError, "embedded-display update"):
+                self.service.launch({**self.plan, "session": "00000000-0000-0000-0000-000000000001"})
 
     def test_stale_close_does_not_stop_new_game(self):
         self.service.session = "00000000-0000-0000-0000-000000000002"
