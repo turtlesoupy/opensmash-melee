@@ -19,12 +19,12 @@
     {
       "id": 3,
       "key": "one-player-character-select",
-      "label": "1P Character Select"
+      "label": "Classic Character Select"
     },
     {
       "id": 4,
       "key": "full-boot",
-      "label": "Full Boot"
+      "label": "Original Title / All Modes"
     }
   ],
   "stages": [

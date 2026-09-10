@@ -7,6 +7,7 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate, NSCo
     var targets=[NSPopUpButton]()
     var targetIDs:[Int] { [-1] + schema.fighters.map{$0.id} }
     var devices=[NSPopUpButton](), characters=[NSComboBox](), characterKeys=[String](), characterNames=[String]()
+    var preparingDisc=false
     var playActivity:NSObjectProtocol?
     var launchTimer:Timer?, launchReady=false, launchStarted=Date(), progress:NSProgressIndicator!
     var schema:LaunchSchema!, settings:LaunchSettings!, root:URL?, game:Process?, bridge:ControllerBridge?
@@ -40,6 +41,7 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate, NSCo
             schema=try launchSchema();settings=schema.defaults
             if let data=try? Data(contentsOf:support.appendingPathComponent("launch-settings.json")),let saved=try? JSONDecoder().decode(LaunchSettings.self,from:data),saved.ports.count==4 {settings=saved}
             let menu=NSMenu(), item=NSMenuItem(), appMenu=NSMenu()
+            let discItem=appMenu.addItem(withTitle:"Choose Game Disc…",action:#selector(chooseNewROM),keyEquivalent:"o");discItem.target=self
             appMenu.addItem(withTitle:"Quit OpenSmash Melee",action:#selector(NSApplication.terminate(_:)),keyEquivalent:"q")
             item.submenu=appMenu;menu.addItem(item);NSApp.mainMenu=menu
             window=NSWindow(contentRect:NSRect(x:0,y:0,width:760,height:620),styleMask:[.titled,.closable],backing:.buffered,defer:false)
@@ -103,19 +105,25 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate, NSCo
             if !available.contains(targetIDs[targets[i].indexOfSelectedItem]) {targets[i].selectItem(at:0)}
         }
     }
-    func chooseROM() {
+    @objc func chooseNewROM() {
+        guard game?.isRunning != true else {status.stringValue="Close the game before changing its disc.";return}
+        chooseROM(force:true)
+    }
+    func chooseROM(force:Bool=false) {
+        guard !preparingDisc else {return}
         var rom:URL?
-        if !arguments.contains("--choose-rom"),let path=try? String(contentsOf:support.appendingPathComponent("rom-path.txt"),encoding:.utf8),fm.fileExists(atPath:path){rom=URL(fileURLWithPath:path)}
+        if !force && !arguments.contains("--choose-rom"),let path=try? String(contentsOf:support.appendingPathComponent("rom-path.txt"),encoding:.utf8),fm.fileExists(atPath:path){rom=URL(fileURLWithPath:path)}
         if rom==nil {
             let picker=NSOpenPanel();picker.title="Choose Melee USA v1.02";picker.message="Select your unmodified ISO or GCM. Its full hash is checked before importing.";picker.allowsMultipleSelection=false;picker.canChooseDirectories=false
-            guard picker.runModal() == .OK else{NSApp.terminate(nil);return};rom=picker.url
+            guard picker.runModal() == .OK else{status.stringValue="Choose Game Disc… from the app menu when you’re ready.";return};rom=picker.url
         }
         guard let rom=rom else{return}
+        preparingDisc=true;play.isEnabled=false
         DispatchQueue.global(qos:.userInitiated).async {
             do {
                 let game=try prepare(rom,self.build){message in DispatchQueue.main.async{self.status.stringValue=message}}
-                DispatchQueue.main.async{self.root=game;self.play.isEnabled=true;self.status.stringValue="Ready. Choose your fighter and launch mode.";if arguments.contains("--play"){self.startGame()}}
-            }catch{DispatchQueue.main.async{self.showError(error)}}
+                DispatchQueue.main.async{self.preparingDisc=false;self.root=game;self.play.isEnabled=true;self.status.stringValue="Ready. Choose your fighter and launch mode.";if arguments.contains("--play"){self.startGame()}}
+            }catch{DispatchQueue.main.async{self.preparingDisc=false;self.play.isEnabled=self.root != nil;self.status.stringValue="Disc setup failed. Use Choose Game Disc… in the app menu to retry.";self.showError(error)}}
         }
     }
     func key(_ box:NSComboBox,selectedAllowed:Bool) throws -> String {

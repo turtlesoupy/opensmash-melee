@@ -61,6 +61,17 @@ func prepare(_ rom: URL, _ build: Build, status: (String) -> Void) throws -> URL
     let suffix = build.costumeSha256.isEmpty ? "original" : String(build.costumeSha256.prefix(16))
     let game = games.appendingPathComponent("GALE01-r2-" + suffix)
     let marker = game.appendingPathComponent("verified-iso.sha256")
+    if fm.fileExists(atPath: game.path) {
+        var valid = (try? String(contentsOf: marker, encoding: .utf8)) == build.isoSha256
+        valid = valid && (try? sha256(game.appendingPathComponent("sys/main.dol"))) == build.dolSha256
+        if !build.costume.isEmpty {
+            valid = valid && (try? sha256(game.appendingPathComponent("files/" + build.costume))) == build.costumeSha256
+        }
+        if !valid {
+            status("Repairing your cached game from the verified disc…")
+            try fm.moveItem(at: game, to: games.appendingPathComponent("invalid-" + UUID().uuidString))
+        }
+    }
     if !fm.fileExists(atPath: game.path) {
         status("Importing your game locally. This is only needed once…")
         let staging = games.appendingPathComponent("import-" + UUID().uuidString)

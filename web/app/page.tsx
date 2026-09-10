@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Game from "./Game";
+import BootScreen from "./BootScreen";
 import LaunchSettings from "./LaunchSettings";
 import RosterGrid, { FrameRule } from "./RosterGrid";
 import SiteDialog from "./SiteDialog";
+import ImportCharacter from "./ImportCharacter";
 import { loadSettings, type Settings } from "@/lib/launch";
 import { unlockAudio } from "@/lib/audio";
 import { warmMelee } from "@/lib/melee-session";
@@ -13,6 +15,8 @@ export type Fighter = {
   short: string;
   target: string;
   review?: boolean;
+  portrait?: string;
+  imported?: boolean;
 };
 export const names: Record<string, string> = {
   mario: "Mario",
@@ -24,6 +28,7 @@ export const names: Record<string, string> = {
 };
 const ranks = new Map(order.map((slug, index) => [slug, index]));
 export default function Home() {
+  const [gameReady,setGameReady]=useState(false);
   const [settings, setSettings] = useState(loadSettings);
   const [roster, setRoster] = useState<Fighter[]>([]),
     [query, setQuery] = useState(""),
@@ -32,27 +37,28 @@ export default function Home() {
       null,
     ),
     [error, setError] = useState("");
-  const [dialog, setDialog] = useState<"Settings" | "Controls" | "About" | null>(null);
+  const [dialog, setDialog] = useState<"Settings" | "Controls" | "About" | "Import character" | null>(null);
   const frame = useRef<HTMLDivElement>(null),
     launchId = useRef(0);
   useEffect(() => {
     localStorage.setItem("melee-launch-v1", JSON.stringify(settings));
   }, [settings]);
   useEffect(() => {
-    warmMelee();
     document.body.classList.add("is-game-booted");
     return () => document.body.classList.remove("is-game-booted");
   }, []);
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/catalog.json", { signal: controller.signal })
-      .then((r) => {
-        if (!r.ok) throw Error("The fighter roster could not load.");
-        return r.json();
+    Promise.all([fetch("/catalog.json", { signal: controller.signal }), fetch("/api/imports", { signal: controller.signal })])
+      .then(async ([base,imports]) => {
+        if (!base.ok) throw Error("The fighter roster could not load.");
+        const catalog=await base.json();
+        const imported=imports.ok?await imports.json():[];
+        return [...imported,...(catalog.fighters||catalog)];
       })
       .then((data) =>
         setRoster(
-          (data.fighters || data).sort(
+          data.sort(
             (a: Fighter, b: Fighter) =>
               (ranks.get(a.slug) ?? Infinity) - (ranks.get(b.slug) ?? Infinity),
           ),
@@ -63,7 +69,10 @@ export default function Home() {
       });
     return () => controller.abort();
   }, []);
+  useEffect(()=>{if(gameReady)warmMelee();},[gameReady]);
   const choose = (fighter: Fighter) => {
+    if(!gameReady){setError("Choose and verify your Melee ISO in the boot screen first.");frame.current?.scrollIntoView({block:"start"});return;}
+    setError("");
     void unlockAudio().catch(() => {});
     setSelected({ id: ++launchId.current, fighter, settings: structuredClone(settings) });
     frame.current?.scrollIntoView({ block: "start", behavior: "instant" });
@@ -100,6 +109,7 @@ export default function Home() {
             />
           </a>
           <nav className="retro-site-nav" aria-label="Site information and settings">
+            <button className="retro-site-link" onClick={()=>setDialog("Import character")}>Import character</button>
             <button className="retro-site-link" onClick={() => setDialog("About")}>
               About
             </button>
@@ -175,15 +185,7 @@ export default function Home() {
                 onClose={() => setSelected(null)}
               />
             ) : (
-              <iframe
-                className="intro-video"
-                title="Smash.fun original introduction"
-                src="https://www.youtube-nocookie.com/embed/Uj3N_CbYMHs?autoplay=1&controls=1&loop=1&mute=1&playlist=Uj3N_CbYMHs&playsinline=1&rel=0"
-                {...{ credentialless: "" }}
-                allow="autoplay; fullscreen; picture-in-picture"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allowFullScreen
-              />
+              <BootScreen settings={settings} onChange={setSettings} onReady={setGameReady} onSettings={()=>setDialog("Settings")}/>
             )}
             <FrameRule />
           </div>
@@ -218,6 +220,7 @@ export default function Home() {
       </main>
       {dialog && (
         <SiteDialog title={dialog} onClose={() => setDialog(null)}>
+          {dialog === "Import character" && <ImportCharacter onImported={fighter=>setRoster(previous=>[fighter,...previous.filter(f=>f.slug!==fighter.slug)])} onPlay={fighter=>{setDialog(null);choose(fighter);}}/>}
           {dialog === "Settings" && (
             <>
               <LaunchSettings value={settings} onChange={setSettings} roster={roster} />

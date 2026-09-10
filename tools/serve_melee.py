@@ -28,6 +28,8 @@ KINDS = {'mario': (8, 'Mr'), 'luigi': (7, 'Lg'), 'captain-falcon': (0, 'Ca'),
          'fox': (2, 'Fx'), 'marth': (9, 'Ms'), 'link': (6, 'Lk')}
 LOCK = threading.Lock()
 TRACE_IO = False
+IMPORTS = None
+SETUP = None
 
 
 def descendant(root, relative):
@@ -100,8 +102,21 @@ class Handler(BaseHTTPRequestHandler):
     def get_resource(self):
         route = unquote(urlsplit(self.path).path)
         try:
+            if route == '/api/setup':
+                return self.json(SETUP.status())
+            if route.startswith('/api/game') and not SETUP.ready:
+                return self.json({'error': 'Choose and verify your Melee ISO first.'}, 409)
+            if route == '/api/imports':
+                return self.json(list(IMPORTS.rows))
+            if route.startswith('/api/imports/portraits/'):
+                name=route.removeprefix('/api/imports/portraits/')
+                if not re.fullmatch(r'import-[a-f0-9]{24}\.webp',name):raise FileNotFoundError(name)
+                return self.file(descendant(IMPORTS.root,name))
+            if route.startswith('/api/imports/'):
+                job=IMPORTS.jobs.get(route.removeprefix('/api/imports/'))
+                return self.json(dict(job)) if job else self.json({'error':'Import status is no longer available. Try importing the link again.'},404)
             if route == '/api/game':
-                sizes = {str(p.relative_to(GAME)): p.stat().st_size for p in GAME.rglob('*') if p.is_file()}
+                sizes = {p.relative_to(GAME).as_posix(): p.stat().st_size for p in GAME.rglob('*') if p.is_file()}
                 return self.json({'verified': True, 'revision': 'USA 1.02',
                                   'files': list(sizes), 'sizes': sizes})
             if route.startswith('/api/game/'):
@@ -120,7 +135,7 @@ class Handler(BaseHTTPRequestHandler):
                 filename = slots[color]['filename']
                 return self.file(descendant(ROOT / 'build/characters', f'{ident}/{variant}{filename}'))
             if route == '/engine/sys-manifest.json':
-                return self.json([str(p.relative_to(SYS)) for p in SYS.rglob('*') if p.is_file()])
+                return self.json([p.relative_to(SYS).as_posix() for p in SYS.rglob('*') if p.is_file()])
             if route == '/engine/sys-bundle.bin':
                 return self.file(BUILD / 'sys-bundle.bin')
             if route.startswith('/engine/sys/'):
@@ -140,6 +155,30 @@ class Handler(BaseHTTPRequestHandler):
         origin = self.headers.get('Origin', '')
         if origin and origin not in ('http://127.0.0.1:5174', 'http://localhost:5174'):
             return self.send_error(403)
+        if self.path == '/api/setup/disc':
+            try:
+                self.connection.settimeout(60)
+                if self.headers.get_content_type() != 'application/octet-stream':
+                    raise ValueError('Choose an ISO or GCM file.')
+                SETUP.receive(self.rfile, int(self.headers.get('Content-Length', '0')))
+                return self.json(SETUP.status(), 202)
+            except (ValueError, OSError) as error:
+                self.close_connection = True
+                try:
+                    return self.json({'error': str(error)}, 400)
+                except (BrokenPipeError, ConnectionResetError):
+                    return
+        if (self.path == '/api/imports' or self.path.startswith('/api/prepare/')) and not SETUP.ready:
+            return self.json({'error': 'Choose and verify your Melee ISO first.'}, 409)
+        if self.path == '/api/imports':
+            try:
+                length=int(self.headers.get('Content-Length','0'))
+                if not 0<length<=16384 or self.headers.get_content_type()!='application/json':
+                    return self.json({'error':'Send a character import URL as JSON.'},400)
+                body=json.loads(self.rfile.read(length))
+                return self.json(IMPORTS.start(body.get('url'),body.get('target','mario')),202)
+            except (ValueError,TypeError,AttributeError):
+                return self.json({'error':str(sys.exc_info()[1])},400)
         if self.path == '/api/debug':
             length = int(self.headers.get('Content-Length', '0'))
             if not 0 < length < 65536:
@@ -214,21 +253,23 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--iso', type=Path, required=True)
+    parser.add_argument('--iso', type=Path, help='Optional existing ISO; otherwise choose a disc in the web boot screen')
     parser.add_argument('--port', type=int, default=8781)
     parser.add_argument('--characters', type=Path, default=CHARACTERS, help='Exported character library (one directory per roster slug)')
+    parser.add_argument('--import-origin', action='append', default=[], help='Additional exact source-export origin for local development')
     parser.add_argument('--trace-io', action='store_true', help='Record local asset request timings for startup profiling')
     args = parser.parse_args()
     TRACE_IO = args.trace_io
     CHARACTERS = args.characters.expanduser().resolve()
-    # Hash the complete original image before exposing any game assets.
-    with args.iso.open('rb') as stream:
-        actual = hashlib.file_digest(stream, 'sha256').hexdigest()
-    if actual != '0de05981a34156b9cedcef73c73d4244ac05cf6149ab3c9cfed917698819e464':
-        raise SystemExit('Game image does not match the known USA 1.02 hash.')
-    if hashlib.sha256((GAME / 'sys/main.dol').read_bytes()).hexdigest() != 'dc21504513424350bda17a7c65e82371b45112a5dfc1e9f2749a8b7ab0eff646':
-        raise SystemExit('Extracted game executable does not match the runtime.')
+    from opensmash_melee.web_game import GameSetup
+    SETUP = GameSetup(ROOT)
+    if args.iso:
+        SETUP.use_existing(args.iso)
+    else:
+        threading.Thread(target=SETUP.restore, daemon=True).start()
     from pack_browser_sys import pack
     pack(SYS, BUILD / 'sys-bundle.bin')
-    print(f'Verified USA 1.02. Private asset server: http://127.0.0.1:{args.port}', flush=True)
+    print(f'Local game setup and asset server: http://127.0.0.1:{args.port}', flush=True)
+    from opensmash_melee.character_import import ImportManager
+    IMPORTS=ImportManager(CATALOG,LOCK,['https://smash.fun','https://www.smash.fun',*args.import_origin])
     ThreadingHTTPServer(('127.0.0.1', args.port), Handler).serve_forever()

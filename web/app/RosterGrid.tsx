@@ -168,7 +168,7 @@ export default function RosterGrid({
           >
             <img
               className="replica-portrait-layer"
-              src={`/portraits/${f.slug}.webp`}
+              src={f.portrait || `/portraits/${f.slug}.webp`}
               alt=""
               loading="lazy"
               width="90"

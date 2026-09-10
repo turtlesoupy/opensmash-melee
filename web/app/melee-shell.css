@@ -350,3 +350,15 @@ select {
     transition: none !important;
   }
 }
+
+.boot-screen {padding:clamp(18px,4vw,32px);color:#fff4cb;background:#0c0905;min-height:390px;overflow:auto;height:100%;}
+.boot-heading {display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px;}
+.boot-heading h2 {font-size:clamp(20px,3vw,27px);margin:0;}
+.boot-screen p {line-height:1.5;margin:12px 0;}
+.boot-disc {border-top:1px solid #675d43;margin-top:20px;padding-top:8px;}
+.boot-disc small {display:block;line-height:1.5;opacity:.75;margin-top:12px;}
+.boot-action {background:#e9c777;color:#1b1206;border:1px solid #fff0bb;padding:10px 16px;font-weight:700;cursor:pointer;margin-right:12px;}
+.boot-action:disabled {opacity:.5;cursor:wait;}
+.boot-disc progress {width:100%;accent-color:#e9c777;}
+.boot-disc [role=alert] {color:#ffb49a;}
+.intro-video-frame:has(.boot-screen) {aspect-ratio:auto;height:auto;}
