@@ -68,6 +68,8 @@ def build(inputs, out):
         "-DOPENSMASH_NATIVE_SOURCE=" + str(ROOT / "runtime"),
         "-DOPENSMASH_DESKTOP_SOURCE=" + str(ROOT / "desktop"),
     ]
+    if shutil.which("ccache"):
+        flags += ["-DCMAKE_C_COMPILER_LAUNCHER=ccache", "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"]
     if os.name == "nt":
         flags += ["-DCMAKE_CXX_FLAGS=-Wno-microsoft-include"]
     if sys.platform == "darwin":

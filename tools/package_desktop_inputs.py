@@ -8,6 +8,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def package(output):
     runtime = ROOT / "build/browser-engine/meleepad/ref/ModernGekko"
+    required = [
+        "vendor/dolphin/Externals/VulkanMemoryAllocator/include/vk_mem_alloc.h",
+        "vendor/dolphin/Externals/Vulkan-Headers/include/vulkan/vulkan.h",
+        "vendor/dolphin/Externals/cpp-ipc/cpp-ipc/CMakeLists.txt",
+        "vendor/dolphin/Externals/wil/include/wil/resource.h",
+        "vendor/dolphin/Externals/glslang/glslang/build_info.h.tmpl",
+    ]
+    for name in required:
+        if not (runtime/name).is_file():raise ValueError("Initialize the pinned platform dependency first: "+name)
     pointer = (
         ROOT
         / "build/browser-engine/meleepad/ref/ModernGekko-Template/build/modules-macos14-r2/GALE01/active-module.txt"
