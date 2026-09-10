@@ -66,3 +66,19 @@ The common launcher currently exposes the web roster's six standard retarget
 families. The earlier macOS picker and its separately built experimental retarget
 variants remain in the repository; those experimental variant controls have not
 yet been moved into the shared launcher.
+
+## Preview build status (2026-09-10)
+
+Apple Silicon has a packaged preview using the successful GitHub-built engine.
+It passes the clean-profile checks and reaches four-custom-fighter combat. The
+packaging smoke check now also loads the native tools and checks the exact plugin
+filename expected by each platform, catching missing libraries and undiscovered
+launch plugins before distribution.
+
+New GitHub Actions jobs are currently refused by account billing/spending limits.
+Windows and Linux compiler fixes are committed but still require successful CI
+retries; Intel Mac app packaging is also pending. These are not yet all-platform
+release artifacts. After restoring Actions billing, rerun the targeted native
+runtime jobs, collect the four platform ZIPs into the private `desktop-runtime-v1`
+release, then run `desktop-app.yml`. Subsequent launcher edits use that cached
+runtime automatically.
