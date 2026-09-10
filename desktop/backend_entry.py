@@ -1,10 +1,32 @@
 """Frozen Python service; owned source files stay separate from user game data."""
 
-import argparse, json, os, runpy, shutil, sys
+import argparse, json, os, runpy, shutil, sys, tempfile
 from pathlib import Path
 
 # Collected into the frozen interpreter; project code loads from the versioned payload.
 import numpy, PIL.Image, scipy.spatial, scipy.optimize
+
+
+def refresh_code(payload, workspace):
+    """Replace owned code completely; never merge stale modules into a new app."""
+    with tempfile.TemporaryDirectory(
+        prefix=".launcher-update-", dir=workspace
+    ) as staging:
+        staging = Path(staging)
+        names = ["opensmash_melee", "tools", "runtime", "web"]
+        for name in names:
+            shutil.copytree(payload / name, staging / name)
+        for name in names:
+            destination = workspace / name
+            previous = staging / (name + ".previous")
+            if destination.exists():
+                destination.rename(previous)
+            try:
+                (staging / name).rename(destination)
+            except OSError:
+                if previous.exists():
+                    previous.rename(destination)
+                raise
 
 
 def main():
@@ -37,8 +59,7 @@ def main():
     characters = a.resources / ("desktop-characters" if a.development else "characters")
     web = a.resources.parent / "web/dist" if a.development else a.resources / "web"
     # Only application-owned code/config folders are refreshed. assets/ and build/ persist.
-    for name in ["opensmash_melee", "tools", "runtime", "web"]:
-        shutil.copytree(payload / name, workspace / name, dirs_exist_ok=True)
+    refresh_code(payload, workspace)
     os.environ["OPENSMASH_WORKSPACE"] = str(workspace)
     os.environ["OPENSMASH_RUNTIME"] = str(runtime)
     os.environ["OPENSMASH_CHARACTER_ROOT"] = str(characters)

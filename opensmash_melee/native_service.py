@@ -36,13 +36,14 @@ class NativeService:
 
     def status(self):
         running = self.process is not None and self.process.poll() is None
-        text = (
-            self.log.read_text(errors="replace")[-16000:] if self.log.exists() else ""
-        )
+        text = ""
+        if self.log.exists():
+            with self.log.open("rb") as stream:
+                stream.seek(max(0, self.log.stat().st_size - 16000))
+                text = stream.read().decode(errors="replace")
         ready = (
             "[opensmash] destination ready" in text
             or "[opensmash] combat started" in text
-            or "[staticrecomp] secondary idle first hit" in text
         )
         return {
             "protocol": 1,

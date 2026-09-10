@@ -47,6 +47,24 @@ class DesktopServiceTests(unittest.TestCase):
             "costumes": [],
         }
 
+    def test_app_update_removes_stale_code_but_preserves_game_data(self):
+        from desktop.backend_entry import refresh_code
+
+        root = self.service.root
+        payload = root / "payload"
+        workspace = root / "workspace"
+        for name in ["opensmash_melee", "tools", "runtime", "web"]:
+            (payload / name).mkdir(parents=True)
+            (payload / name / "current.txt").write_text("new")
+            (workspace / name).mkdir(parents=True)
+            (workspace / name / "removed.py").write_text("old")
+        (workspace / "assets").mkdir()
+        (workspace / "assets/user-save").write_text("keep")
+        refresh_code(payload, workspace)
+        self.assertEqual((workspace / "assets/user-save").read_text(), "keep")
+        self.assertFalse((workspace / "tools/removed.py").exists())
+        self.assertEqual((workspace / "tools/current.txt").read_text(), "new")
+
     def test_launch_requires_verified_disc(self):
         with self.assertRaisesRegex(ValueError, "verify your ISO"):
             self.service.launch(
