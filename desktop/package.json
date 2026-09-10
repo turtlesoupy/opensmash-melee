@@ -1,0 +1,72 @@
+{
+  "name": "opensmash-melee-desktop",
+  "productName": "OpenSmash Melee",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Shared OpenSmash launcher with a native Melee runtime",
+  "author": "OpenSmash contributors",
+  "license": "MIT",
+  "main": "main.cjs",
+  "scripts": {
+    "dev": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --publish never"
+  },
+  "devDependencies": {
+    "electron": "44.3.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "fun.smash.melee",
+    "asar": true,
+    "directories": {
+      "output": "../build/desktop-artifacts"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "web"
+      },
+      {
+        "from": "../build/desktop-backend",
+        "to": "backend"
+      },
+      {
+        "from": "../build/desktop-runtime",
+        "to": "runtime"
+      },
+      {
+        "from": "../build/desktop-payload",
+        "to": "payload"
+      },
+      {
+        "from": "../build/desktop-characters",
+        "to": "characters"
+      }
+    ],
+    "mac": {
+      "target": [
+        "zip"
+      ],
+      "category": "public.app-category.games",
+      "identity": null
+    },
+    "win": {
+      "target": [
+        "zip"
+      ]
+    },
+    "linux": {
+      "target": [
+        "tar.gz"
+      ],
+      "category": "Game"
+    },
+    "artifactName": "OpenSmash-Melee-${version}-${os}-${arch}.${ext}"
+  }
+}

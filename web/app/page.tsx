@@ -1,5 +1,8 @@
+import {preferences} from '@/lib/desktop';
 import { useEffect, useMemo, useRef, useState } from "react";
 import Game from "./Game";
+import NativeGame from "./NativeGame";
+import {desktop} from "@/lib/desktop";
 import BootScreen from "./BootScreen";
 import LaunchSettings from "./LaunchSettings";
 import RosterGrid, { FrameRule } from "./RosterGrid";
@@ -41,7 +44,7 @@ export default function Home() {
   const frame = useRef<HTMLDivElement>(null),
     launchId = useRef(0);
   useEffect(() => {
-    localStorage.setItem("melee-launch-v1", JSON.stringify(settings));
+    preferences.setItem("melee-launch-v1", JSON.stringify(settings));
   }, [settings]);
   useEffect(() => {
     document.body.classList.add("is-game-booted");
@@ -69,7 +72,7 @@ export default function Home() {
       });
     return () => controller.abort();
   }, []);
-  useEffect(()=>{if(gameReady)warmMelee();},[gameReady]);
+  useEffect(()=>{if(gameReady&&!desktop())warmMelee();},[gameReady]);
   const choose = (fighter: Fighter) => {
     if(!gameReady){setError("Choose and verify your Melee ISO in the boot screen first.");frame.current?.scrollIntoView({block:"start"});return;}
     setError("");
@@ -86,6 +89,7 @@ export default function Home() {
       ),
     [roster, query, target],
   );
+  const Player=desktop()?NativeGame:Game;
   return (
     <>
       <main className="arena-shell" aria-label="Smash.fun Melee character grid">
@@ -177,7 +181,7 @@ export default function Home() {
         >
           <div ref={frame} className={`intro-video-frame ${selected ? "is-game-running" : ""}`}>
             {selected ? (
-              <Game
+              <Player
                 key={selected.id}
                 fighter={selected.fighter}
                 settings={selected.settings}

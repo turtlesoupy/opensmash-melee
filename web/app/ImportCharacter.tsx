@@ -1,3 +1,4 @@
+import {preferences} from '@/lib/desktop';
 import {useEffect,useRef,useState} from 'react';
 import type {Fighter} from './page';
 import {names} from './page';
@@ -6,7 +7,7 @@ const pendingKey='melee-pending-import-v1';
 export default function ImportCharacter({onImported,onPlay}:{onImported:(f:Fighter)=>void;onPlay:(f:Fighter)=>void}) {
  const [url,setUrl]=useState(''),[target,setTarget]=useState('mario'),[error,setError]=useState('');
  const [job,setJob]=useState<ImportJob|null>(null),[starting,setStarting]=useState(false);
- const [id,setId]=useState(()=>localStorage.getItem(pendingKey)||'');
+ const [id,setId]=useState(()=>preferences.getItem(pendingKey)||'');
  const imported=useRef(onImported);imported.current=onImported;
  const busy=starting || !!id && (!job || ['queued','working'].includes(job.state));
  useEffect(()=>{
@@ -17,10 +18,10 @@ export default function ImportCharacter({onImported,onPlay}:{onImported:(f:Fight
     const response=await fetch('/api/imports/'+encodeURIComponent(id),{signal:controller.signal});
     const result=await response.json();if(!response.ok)throw Error(result.error||'Could not check your import.');
     setJob(result);
-    if(result.state==='complete'){localStorage.removeItem(pendingKey);imported.current(result.fighter);}
-    else if(result.state==='failed'){localStorage.removeItem(pendingKey);setError(result.message);}
+    if(result.state==='complete'){preferences.removeItem(pendingKey);imported.current(result.fighter);}
+    else if(result.state==='failed'){preferences.removeItem(pendingKey);setError(result.message);}
     else timer=setTimeout(poll,1000);
-   }catch(e){if(!controller.signal.aborted){setError((e as Error).message);setId('');localStorage.removeItem(pendingKey);}}
+   }catch(e){if(!controller.signal.aborted){setError((e as Error).message);setId('');preferences.removeItem(pendingKey);}}
   };
   void poll();return()=>{controller.abort();clearTimeout(timer);};
  },[id]);
@@ -29,7 +30,7 @@ export default function ImportCharacter({onImported,onPlay}:{onImported:(f:Fight
   try {
    const response=await fetch('/api/imports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url.trim(),target})});
    const result=await response.json();if(!response.ok)throw Error(result.error||'Could not start the import.');
-   setJob(result);localStorage.setItem(pendingKey,result.id);setId(result.id);
+   setJob(result);preferences.setItem(pendingKey,result.id);setId(result.id);
   }catch(e){setError((e as Error).message);}finally{setStarting(false);}
  }
  return <section className="launch-settings">

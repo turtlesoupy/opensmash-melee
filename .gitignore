@@ -31,3 +31,5 @@ __pycache__/
 *.rpl
 *.mp4
 *.webm
+/desktop/node_modules/
+/desktop/dist/

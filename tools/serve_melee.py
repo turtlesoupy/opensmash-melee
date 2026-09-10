@@ -30,6 +30,9 @@ LOCK = threading.Lock()
 TRACE_IO = False
 IMPORTS = None
 SETUP = None
+NATIVE = None
+TOKEN = os.environ.get("OPENSMASH_DESKTOP_TOKEN", "")
+DIST = Path(os.environ["OPENSMASH_WEB_DIST"]) if os.environ.get("OPENSMASH_WEB_DIST") else None
 
 
 def descendant(root, relative):
@@ -89,6 +92,8 @@ class Handler(BaseHTTPRequestHandler):
         self.do_GET()
 
     def do_GET(self):
+        if TOKEN and self.headers.get("X-OpenSmash-Token") != TOKEN:
+            return self.send_error(403)
         started = time.perf_counter()
         try:
             self.get_resource()
@@ -102,12 +107,15 @@ class Handler(BaseHTTPRequestHandler):
     def get_resource(self):
         route = unquote(urlsplit(self.path).path)
         try:
+            if route == '/api/native/status' and NATIVE:
+                return self.json(NATIVE.status())
             if route == '/api/setup':
                 return self.json(SETUP.status())
             if route.startswith('/api/game') and not SETUP.ready:
                 return self.json({'error': 'Choose and verify your Melee ISO first.'}, 409)
             if route == '/api/imports':
                 return self.json(list(IMPORTS.rows))
+            if NATIVE and route == '/catalog.json':return self.file(ROOT/'web/public/catalog.json')
             if route.startswith('/api/imports/portraits/'):
                 name=route.removeprefix('/api/imports/portraits/')
                 if not re.fullmatch(r'import-[a-f0-9]{24}\.webp',name):raise FileNotFoundError(name)
@@ -144,6 +152,8 @@ class Handler(BaseHTTPRequestHandler):
                 name = route[len('/engine/'):]
                 root = BUILD if name.startswith('opensmash-web') else WEB
                 return self.file(descendant(root, name))
+            if DIST:
+                return self.file(descendant(DIST, route.lstrip('/') or 'index.html'))
             self.send_error(404)
         except (ValueError, FileNotFoundError):
             self.send_error(404)
@@ -151,10 +161,30 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
     def do_POST(self):
+        if TOKEN and self.headers.get('X-OpenSmash-Token') != TOKEN:
+            return self.send_error(403)
         # Only same-origin local UI calls may start a converter process.
         origin = self.headers.get('Origin', '')
-        if origin and origin not in ('http://127.0.0.1:5174', 'http://localhost:5174'):
+        if not TOKEN and origin and origin not in ('http://127.0.0.1:5174', 'http://localhost:5174'):
             return self.send_error(403)
+        if self.path.startswith('/api/native/') and NATIVE:
+            try:
+                length=int(self.headers.get('Content-Length','0'))
+                if not 0<length<=65536:raise ValueError('Invalid request size')
+                body=json.loads(self.rfile.read(length))
+                if self.path=='/api/native/launch':return self.json(NATIVE.launch(body))
+                if self.path=='/api/native/stop':return self.json(NATIVE.stop(body.get('session')))
+                if self.path=='/api/native/disc':
+                    path=Path(body['path']).expanduser().resolve()
+                    if not path.is_file():raise ValueError('Disc file is unavailable')
+                    def receive_disc():
+                        try:
+                            with path.open('rb') as stream:SETUP.receive(stream,path.stat().st_size)
+                        except Exception as error:SETUP.progress('error',str(error))
+                    threading.Thread(target=receive_disc,daemon=True).start()
+                    return self.json({'accepted':True},202)
+                return self.send_error(404)
+            except (ValueError,KeyError,TypeError,OSError) as error:return self.json({'error':str(error)},400)
         if self.path == '/api/setup/disc':
             try:
                 self.connection.settimeout(60)
@@ -205,7 +235,7 @@ class Handler(BaseHTTPRequestHandler):
             if not (output / f'Pl{code}Nr.dat').is_file():
                 source = CHARACTERS / slug
                 if not (source / 'rigged.glb').is_file():
-                    raise ValueError('Character source is missing. Set --characters to your exported OpenSmash character library.')
+                    return self.json({'error':'Character source is missing. Reinstall the character library or import the character again.'},422)
                 result = subprocess.run([sys.executable, str(ROOT / 'tools/build_character.py'),
                                          str(source), '--id', ident, '--target', row['target']],
                                         cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -216,10 +246,12 @@ class Handler(BaseHTTPRequestHandler):
             from tools.upgrade_character_surfaces import upgrade
             upgrade(ident)
         host_skin = parse_qs(urlsplit(self.path).query).get('skin') == ['host']
+        compact = NATIVE is not None and query.get('compact') == ['1']
+        skin_folder = 'browser-compact' if compact else 'browser'
         if host_skin:
             with LOCK:
-                if not (output / 'browser' / f'Pl{code}Nr.dat').is_file():
-                    result = subprocess.run([sys.executable, str(ROOT / 'tools/build_browser_skin_costume.py'), ident], cwd=ROOT, capture_output=True, text=True)
+                if not (output / skin_folder / f'Pl{code}Nr.dat').is_file():
+                    result = subprocess.run([sys.executable, str(ROOT / 'tools/build_browser_skin_costume.py'), ident, *(['--compact'] if compact else [])], cwd=ROOT, capture_output=True, text=True)
                     if result.returncode:
                         (output / 'browser-error.log').write_text(result.stdout + result.stderr)
                         return self.json({'error': 'The browser skinning build failed.'}, 422)
@@ -227,7 +259,7 @@ class Handler(BaseHTTPRequestHandler):
         # Refresh existing caches too; a material fix must reach previously
         # selected fighters without forcing another mesh conversion.
         with LOCK:
-            folder = output / 'browser' if host_skin else output
+            folder = output / skin_folder if host_skin else output
             base = folder / slots[0]['filename']
             old = base.read_bytes()
             lit = upgrade_cached_lighting(old)
@@ -241,7 +273,7 @@ class Handler(BaseHTTPRequestHandler):
                     atomic_write(metadata, (json.dumps(info, indent=2) + '\n').encode())
         if color:
             with LOCK:
-                folder = output / 'browser' if host_skin else output
+                folder = output / skin_folder if host_skin else output
                 raw = costume_variant((folder / slots[0]['filename']).read_bytes(), fighter, color)
                 (folder / filename).write_bytes(raw)
         self.json({'fighter': fighter, 'filename': filename, 'url': f'/api/costume/{slug}?color={color}' + ('&skin=host' if host_skin else '')})
@@ -253,6 +285,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--desktop', action='store_true')
     parser.add_argument('--iso', type=Path, help='Optional existing ISO; otherwise choose a disc in the web boot screen')
     parser.add_argument('--port', type=int, default=8781)
     parser.add_argument('--characters', type=Path, default=CHARACTERS, help='Exported character library (one directory per roster slug)')
@@ -267,9 +300,18 @@ if __name__ == '__main__':
         SETUP.use_existing(args.iso)
     else:
         threading.Thread(target=SETUP.restore, daemon=True).start()
-    from pack_browser_sys import pack
-    pack(SYS, BUILD / 'sys-bundle.bin')
+    if not args.desktop:
+        from pack_browser_sys import pack
+        pack(SYS, BUILD / 'sys-bundle.bin')
     print(f'Local game setup and asset server: http://127.0.0.1:{args.port}', flush=True)
     from opensmash_melee.character_import import ImportManager
     IMPORTS=ImportManager(CATALOG,LOCK,['https://smash.fun','https://www.smash.fun',*args.import_origin])
-    ThreadingHTTPServer(('127.0.0.1', args.port), Handler).serve_forever()
+    if args.desktop:
+        if not TOKEN:raise SystemExit('Desktop service requires its session token')
+        from opensmash_melee.native_service import NativeService
+        NATIVE=NativeService(ROOT,CATALOG,SETUP,os.environ['OPENSMASH_RUNTIME'])
+    server=ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
+    if args.desktop:print(json.dumps({'port':server.server_port,'protocol':1}),flush=True)
+    try:server.serve_forever()
+    finally:
+        if NATIVE:NATIVE.stop()

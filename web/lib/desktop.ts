@@ -1,0 +1,17 @@
+export type DesktopBridge = {
+  protocol: 1;
+  storage: Pick<Storage, "getItem" | "setItem" | "removeItem">;
+  chooseDisc: () => Promise<{ cancelled?: boolean; accepted?: boolean }>;
+};
+declare global {
+  interface Window {
+    meleeDesktop?: DesktopBridge;
+  }
+}
+export const desktop = () => window.meleeDesktop;
+
+export const preferences = {
+  getItem: (key: string) => (desktop()?.storage || localStorage).getItem(key),
+  setItem: (key: string, value: string) => (desktop()?.storage || localStorage).setItem(key, value),
+  removeItem: (key: string) => (desktop()?.storage || localStorage).removeItem(key),
+};

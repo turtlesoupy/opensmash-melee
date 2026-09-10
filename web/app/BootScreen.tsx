@@ -1,4 +1,5 @@
 import {useEffect,useRef,useState} from 'react';
+import {desktop} from '@/lib/desktop';
 import {schema,type Settings} from '@/lib/launch';
 type Setup={state:string;ready:boolean;message:string;progress?:number};
 const descriptions:Record<number,string>={0:'Jump straight into a match with your chosen rules.',1:'Open the VS menu to choose how to play.',2:'Choose your fighters and stage inside Melee.',3:'Choose a fighter for Classic mode.',4:'Start at the original title screen. Navigate to Adventure, All-Star, Training, Events and other modes in-game.'};
@@ -43,7 +44,7 @@ export default function BootScreen({settings,onChange,onReady,onSettings}:{setti
    {busy&&<progress aria-label="Disc setup progress" {...(transfer!==null?{value:transfer,max:1}:{})}/>}
    {(error||connectionError)&&<p role="alert">{error||connectionError}</p>}
    <input ref={input} type="file" accept=".iso,.gcm" aria-label="Choose Melee ISO or GCM" hidden onChange={e=>{select(e.target.files?.[0]);e.target.value='';}}/>
-   <button className="boot-action" disabled={busy&&transfer===null&&!error&&!connectionError||transfer!==null} onClick={()=>input.current?.click()}>{setup.ready?'Choose another disc':'Choose Melee ISO / GCM'}</button>
+   <button className="boot-action" disabled={busy&&transfer===null&&!error&&!connectionError||transfer!==null} onClick={async()=>{if(desktop()){try{setError('');await desktop()!.chooseDisc();}catch(e){setError((e as Error).message);}}else input.current?.click();}}>{setup.ready?'Choose another disc':'Choose Melee ISO / GCM'}</button>
    {transfer!==null&&<button className="retro-site-link" onClick={()=>request.current?.abort()}>Cancel transfer</button>}
    <small>Your disc stays on this computer. We check the complete USA 1.02 hash before preparing it, then remember the verified game for next time.</small>
   </div>

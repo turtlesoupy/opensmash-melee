@@ -108,9 +108,12 @@ class GameSetup:
             self.game.parent.mkdir(parents=True, exist_ok=True)
             staging = Path(tempfile.mkdtemp(prefix='.web-game-', dir=self.game.parent))
             tool = self.root / ('melee/build/tools/dtk.exe' if os.name == 'nt' else 'melee/build/tools/dtk')
-            if not tool.is_file():
-                raise ValueError('The local installation is missing the disc extractor. Install the complete release tools and try again.')
-            result = subprocess.run([str(tool), 'disc', 'extract', '--quiet', str(iso), str(staging)], capture_output=True, text=True, timeout=300)
+            command=[str(tool), 'disc', 'extract', '--quiet', str(iso), str(staging)]
+            if os.environ.get('OPENSMASH_RUNTIME'):
+                tool=Path(os.environ['OPENSMASH_RUNTIME'])/('dolrecomp.exe' if os.name=='nt' else 'dolrecomp')
+                command=[str(tool),'extract',str(iso),str(staging)]
+            if not tool.is_file():raise ValueError('The local installation is missing the disc extractor. Install the complete release tools and try again.')
+            result = subprocess.run(command, capture_output=True, text=True, timeout=300)
             if result.returncode:
                 raise ValueError('Disc extraction failed. Check free disk space and try again.')
             if hashlib.sha256((staging/'sys/main.dol').read_bytes()).hexdigest() != DOL_SHA256:
