@@ -52,6 +52,8 @@ def build(inputs, out):
     if os.name == "nt":
         pch = runtime / "vendor/dolphin/Source/PCH/CMakeLists.txt"
         pch.write_text(pch.read_text().replace("#return()", "return()"))
+        vendor_cmake=runtime/"vendor/dolphin/CMakeLists.txt"
+        vendor_cmake.write_text(vendor_cmake.read_text().replace("add_compile_options(/WX)", "# Keep upstream warnings visible without promoting new clang-cl diagnostics to errors."))
         for name in ["AES.cpp","SHA1.cpp"]:
             source_file=runtime/"vendor/dolphin/Source/Core/Common/Crypto"/name
             source_file.write_text(source_file.read_text().replace("#ifdef _MSC_VER\n#define ATTRIBUTE_TARGET(x)", "#if defined(_MSC_VER) && !defined(__clang__)\n#define ATTRIBUTE_TARGET(x)"))
