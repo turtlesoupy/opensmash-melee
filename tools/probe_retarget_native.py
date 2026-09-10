@@ -47,6 +47,6 @@ def run(slug,fighter,costumes,base):
    except subprocess.TimeoutExpired:proc.kill();proc.wait()
    shutil.rmtree(user/'Dump/Frames',ignore_errors=True)
 if __name__=='__main__':
- ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--case',choices=['pikachu','ice-climbers']);ap.add_argument('--output',type=Path,default=ROOT/'build/retarget-roster-probe/native');a=ap.parse_args()
- for case in [('pikachu',13,[('pikachu','Pk')]),('ice-climbers',14,[('popo','Pp'),('nana','Nn')])]:
+ ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--case',choices=['pikachu','ice-climbers','kirby','jigglypuff']);ap.add_argument('--output',type=Path,default=ROOT/'build/retarget-roster-probe/native');a=ap.parse_args()
+ for case in [('pikachu',13,[('pikachu','Pk')]),('ice-climbers',14,[('popo','Pp'),('nana','Nn')]),('kirby',4,[('kirby','Kb')]),('jigglypuff',15,[('jigglypuff','Pr')])]:
   if not a.case or a.case==case[0]:run(*case,a.output.resolve())

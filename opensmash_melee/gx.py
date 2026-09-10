@@ -217,7 +217,12 @@ def replace_costume(archive, mesh, skeleton, profile):
         isolate_body_texture_animation(archive,profile['symbol'],dobj_index,archive.ptr(archive.ptr(archive.ptr(selected+8)+8)+76))
     if "presentation" in mesh:
         from .presentation import attach, portrait_fit
-        attach(archive,selected,mesh["presentation"],portrait_fit(mesh,skeleton,profile),profile.get("stature"))
+        portrait=portrait_fit(mesh,skeleton,profile)
+        attach(archive,selected,mesh["presentation"],portrait,profile.get("stature"))
+        if dobj_index != 0:
+            # Hot-path identity lookup reads the first root material. Preserve
+            # its native animation inputs and mirror only presentation data.
+            attach(archive,owner['dobj'],mesh["presentation"],portrait,profile.get("stature"))
     # Preserve all skeleton flags; enable normals for the custom model owner.
     archive.pack('I',owner['offset']+4,owner['flags'] | 0x80)
     return dict(vertices=len(mesh['positions']),triangles=len(mesh['triangles']),

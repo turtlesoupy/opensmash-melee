@@ -5,7 +5,7 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate, NSCo
     var window:NSWindow!, status:NSTextField!, play:NSButton!, mode:NSPopUpButton!, stage:NSPopUpButton!
     var level:NSTextField!, stocks:NSTextField!, minutes:NSTextField!, chosen:NSComboBox!
     var targets=[NSPopUpButton]()
-    let targetIDs=[-1,8,7,0,2,9,6]
+    var targetIDs:[Int] { [-1] + schema.fighters.map{$0.id} }
     var devices=[NSPopUpButton](), characters=[NSComboBox](), characterKeys=[String](), characterNames=[String]()
     var playActivity:NSObjectProtocol?
     var launchTimer:Timer?, launchReady=false, launchStarted=Date(), progress:NSProgressIndicator!
@@ -69,7 +69,9 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate, NSCo
                 device.selectItem(at:deviceKeys.firstIndex(of:settings.ports[i].device) ?? 6);devices.append(device)
                 let character=combo(["Selected fighter"]+characterNames,294,y,252)
                 character.selectItem(at:settings.ports[i].character=="selected" ? 0 : (characterKeys.firstIndex(of:settings.ports[i].character).map{$0+1} ?? 0));characters.append(character)
-                let target=popup(["Default target","Mario","Luigi","Captain Falcon","Fox","Marth","Link"],552,y,182)
+                let target=popup(["Default target"] + schema.fighters.map { choice in
+                    choice.label + ([8,7,0,2,9,6].contains(choice.id) ? "" : ([4,15].contains(choice.id) ? " · big head" : " · experimental"))
+                },552,y,182)
                 target.selectItem(at:targetIDs.firstIndex(of:settings.ports[i].target ?? -1) ?? 0);targets.append(target)
             }
             refreshTargets()

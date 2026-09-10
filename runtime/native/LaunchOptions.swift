@@ -9,7 +9,7 @@ struct LaunchSettings: Codable {
 struct LaunchSchema: Decodable {
     let modes:[Choice]; let stages:[Choice]; let fighters:[Choice]; let defaults:LaunchSettings
 }
-struct Costume: Codable { let filename:String; let path:String; let sha256:String }
+struct Costume: Codable { let filename:String; let path:String; let sha256:String; var companions:[Costume]? = nil }
 struct Retarget: Codable { let fighter:Int; let costumes:[Costume]; let compactCostumes:[Costume]? }
 struct Character: Codable { let slug:String; let name:String; let fighter:Int; let costumes:[Costume]; let compactCostumes:[Costume]?; var targets:[Retarget]? = nil }
 struct LaunchPlan {
@@ -49,6 +49,12 @@ func launchPlan(_ input:LaunchSettings, selected:String, characters:[Character],
     }
     if settings.mode==0 && entries.filter({$0.0.device != "off"}).count<2 { throw Failure(message:"Free-for-All needs at least two active players.") }
     if settings.mode==3 && ["off","cpu"].contains(entries[0].0.device) { throw Failure(message:"1P Character Select needs a human on player 1.") }
+    // Game & Watch shares one costume archive across every color.
+    let flatFighters=entries.filter { $0.1 == 3 && $0.0.device != "off" }
+    let flatIdentities=Set(flatFighters.map { $0.2?.slug ?? "vanilla" })
+    if flatIdentities.count > 1 && flatFighters.contains(where:{$0.2 != nil}) {
+        throw Failure(message:"Game & Watch shares one costume across colors. Use the same custom character for every Game & Watch slot, or choose another target.")
+    }
     var packed=[Int](), costumes=[Costume]()
     for (p,fighter,custom) in entries {
         var color=0
@@ -76,7 +82,8 @@ func launchPlan(_ input:LaunchSettings, selected:String, characters:[Character],
             return costume
         }
     }
-    return LaunchPlan(settings:settings,packed:packed,costumes:costumes)
+    let expanded=costumes.flatMap { [$0] + ($0.companions ?? []) }
+    return LaunchPlan(settings:settings,packed:packed,costumes:expanded)
 }
 
 // Each lineup shares immutable imported files. Only replaced costumes are copied.

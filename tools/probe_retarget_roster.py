@@ -44,15 +44,22 @@ def main():
                 if a:t['animations'].append(dict(a,label=label))
                 else:row['warnings'].append('No compatible '+label+' clip')
 
-            if slug in ('kirby','jigglypuff'):row['warnings'].append('Blob-rig limb stretch: needs a different body-fit strategy')
+            if slug in ('kirby','jigglypuff'):row['warnings'].append('Big-head fit: internal torso, independent hands and shoes')
             if slug=='samus':row['warnings'].append('Arm cannon states need runtime attachment review')
             if slug in ('popo','nana','roy','young-link'):row['warnings'].append('Native equipment retained in DAT; sheet shows custom body only')
             row['repairs']=t['repairs'];row['original_bounds']=t['original_bounds'];row['joints']=len(t['skeleton'])
             dump(folder/'target.json',t);prepared[slug]=(t,{})
             for source,mesh in meshes.items():
                 try:
-                    profile=source_head_fit(mesh,t['skeleton'],fit(mesh,t));fitted=conform(mesh,t['skeleton'],profile)
-                    profile.update(symbol=t['symbol'],mesh_joint=0,mesh_dobj=0,stature=stature(fitted,original),status='experimental_roster_probe',isolate_body_texture_animation=True,source_sha256=hashlib.sha256((ROOT.parent/f'opensmash/pipeline/play/ui/{source}/rigged.glb').read_bytes()).hexdigest())
+                    profile=source_head_fit(mesh,t['skeleton'],fit(mesh,t))
+                    if slug in ('kirby','jigglypuff'):
+                        profile.update(ball_fit={'version':1,'radius':4.3 if slug=='kirby' else 4.5},head_style='ball')
+                        from tools.fit_ball_hands import fit_hands
+                        subprocess.run(['node',str(ROOT/'tools/probe_retarget_poses.mjs'),str(out),slug],check=True)
+                        samples=json.loads((folder/'poses.json').read_text())['clearancePoses']
+                        profile=fit_hands(mesh,t['skeleton'],profile,samples)
+                    fitted=conform(mesh,t['skeleton'],profile)
+                    profile.update(symbol=t['symbol'],mesh_joint=0,mesh_dobj=(6 if slug=='kirby' else 0),stature=({'scale':1.0,'offset':0.0,'version':1} if profile.get('ball_fit') else stature(fitted,original)),status='experimental_roster_probe',isolate_body_texture_animation=True,source_sha256=hashlib.sha256((ROOT.parent/f'opensmash/pipeline/play/ui/{source}/rigged.glb').read_bytes()).hexdigest())
 
                     gear={'popo':[15],'nana':[15],'roy':[21,77,78],'young-link':[27,28,71,73,74,75]}
                     if slug in gear:
@@ -126,8 +133,18 @@ def main():
             if im:pair.paste(im,(20+(i*2+j)*244,90))
             d.text((20+(i*2+j)*244,65),source+' / '+slug,font=small,fill='white')
     d.text((20,365),'Two meshes, two skeletons. This sheet does not prove partner spawning or hammer attachment.',font=font,fill='#bcc7d8');pair.save(out/'ice-climbers.jpg',quality=93)
+    ball=Image.new('RGB',(1200,680),'#161b24');draw=ImageDraw.Draw(ball)
+    for row,source in enumerate(SOURCES):
+        for col,slug in enumerate(['kirby','jigglypuff']):
+            for sub,pose in enumerate(['idle','run']):
+                x=col*600+sub*300;y=row*340
+                draw.text((x+12,y+10),source+' / '+slug+' / '+pose,font=small,fill='white')
+                im=cache.get((slug,source,pose))
+                if im:ball.paste(im.resize((300,300)),(x,y+35))
+    ball.save(out/'big-head.jpg',quality=94)
     dump(out/'report.json',rows)
-    links=''.join(f'<h2>Sheet {i}</h2><img src="sheet-{i}.jpg">' for i in range(1,4))
+    links='<h2>Kirby and Jigglypuff: big-head fit</h2><img src="big-head.jpg">'
+    links+=''.join(f'<h2>Sheet {i}</h2><img src="sheet-{i}.jpg">' for i in range(1,4))
     (out/'index.html').write_text('<!doctype html><meta name="viewport" content="width=device-width"><title>Retarget sweep</title><style>body{background:#161b24;color:#eee;font:18px system-ui;margin:24px}img{max-width:100%}a{color:#aef}</style><h1>Naive retarget sweep</h1><p>Local shape and original-animation review. Experimental DATs; not promoted to the playable roster.</p><img src="overview.jpg">'+links+'<h2>Ice Climbers</h2><img src="ice-climbers.jpg"><p><a href="report.json">Detailed mapping / pose / export report</a></p>')
     print(out/'index.html',flush=True)
 if __name__=='__main__':main()

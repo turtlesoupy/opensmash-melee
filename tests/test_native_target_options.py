@@ -42,6 +42,17 @@ do {_ = try launchPlan(settings,selected:"lincoln",characters:[lincoln,other],sc
 assert(rejected)
 let saved=try JSONDecoder().decode(LaunchSettings.self,from:JSONEncoder().encode(settings))
 assert(saved.ports[0].target==9)
+var pair=costumes("popo")
+for i in pair.indices {pair[i].companions=[costumes("nana")[i]]}
+let ice=Retarget(fighter:14,costumes:pair,compactCostumes:nil)
+let probe=Character(slug:"probe",name:"Probe",fighter:0,costumes:costumes("base"),compactCostumes:nil,targets:[ice,Retarget(fighter:3,costumes:costumes("flat"),compactCostumes:nil)])
+settings.ports=[Port(device:"keyboard",character:"selected",target:14),Port(device:"cpu",character:"vanilla:14"),Port(device:"off",character:"vanilla:0"),Port(device:"off",character:"vanilla:0")]
+plan=try launchPlan(settings,selected:"probe",characters:[probe],schema:schema)
+assert(plan.costumes.map{$0.path} == ["popo/1","nana/1"])
+settings.ports[0].target=3;settings.ports[1].character="vanilla:3"
+rejected=false
+do {_ = try launchPlan(settings,selected:"probe",characters:[probe],schema:schema)} catch {rejected=true}
+assert(rejected)
 print("Native target selection checks passed")
 '''
         with tempfile.TemporaryDirectory() as folder:

@@ -227,6 +227,9 @@ def package(output, character_id=None):
             characters.append({'slug':row['slug'], 'name':row['name'], 'fighter':fighter, 'costumes':variants,'compactCostumes':compact_variants or None})
         for character in characters:
             character['targets'] = retargets.get(character['slug'], [])
+        if (ROOT / 'tools/bundle_probe_targets.py').is_file():
+            from bundle_probe_targets import bundle
+            bundle(resources, characters)
         info['characters'] = characters
         info['selected'] = ids.get(character_id, {}).get('slug', character_id) if character_id else 'vanilla:8'
         # All lineups start from the verified, unmodified imported game.

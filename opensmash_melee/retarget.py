@@ -3,6 +3,9 @@ import numpy as np
 
 
 def conform(mesh, skeleton, profile):
+    if profile.get("ball_fit"):
+        from .ball_fit import conform_ball
+        return conform_ball(mesh,skeleton,profile)
     if profile.get('normal_smoothing_degrees'):
         from .surfaces import smooth_normals
         mesh = smooth_normals(mesh, profile['normal_smoothing_degrees'])

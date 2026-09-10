@@ -9,6 +9,12 @@ static void frame(CPUState* s){(void)s;frames++;if(frames%60==0)fprintf(stderr,"
 static void actor(CPUState* s){
  if(frames%60)return;
  unsigned fp=read32(s,s->gpr[3]+0x2c),port=moderngekko_mod_read(s,fp+0xc,1);
+ if(frames==360){
+  unsigned count=read32(s,fp+0x5ec),list=read32(s,fp+0x5f0);
+  fprintf(stderr,"[probe-dobjs] port=%u count=%u flags=",port,count);
+  for(unsigned i=0;i<count&&i<128;i++){unsigned d=read32(s,list+4*i);fprintf(stderr,"%u:%x,",i,read32(s,d+0x14));}
+  fprintf(stderr,"\n");
+ }
  fprintf(stderr,"[probe-actor] frame=%u port=%u kind=%u actor=%08x motion=%u x=%.3f y=%.3f\n",frames,port,read32(s,fp+4),fp,read32(s,fp+0x10),readf(s,fp+0xb0),readf(s,fp+0xb4));
 }
 static const ModernGekkoModHook hooks[]={RECOMP_HOOK(0x8016D800,frame),RECOMP_HOOK(0x8006B82C,actor)};

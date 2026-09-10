@@ -48,3 +48,45 @@ class ProbeTests(unittest.TestCase):
     p=source_head_fit(mesh,t['skeleton'],p);c=conform(mesh,t['skeleton'],p);m=shape_metrics(mesh,c,p,t['skeleton'])
     self.assertLess(m['head_anisotropy'],1.03);self.assertLess(m['head_fraction_relative_error'],.05)
     self.assertTrue(np.isfinite(c['positions']).all())
+
+ @unittest.skipUnless(SOURCE.exists(),'Local source mesh required')
+ def test_ball_fit_preserves_head_topology_and_limb_joints(self):
+  for source in [SOURCE,SOURCE.parent.parent/'abrahamlincoln/rigged.glb']:
+   mesh=GLB(source).mesh();head=mesh['names'].index('Head')
+   weight=np.where(mesh['joints']==head,mesh['weights'],0).sum(axis=1)
+   core=(weight>.999)&(mesh['positions'][:,1]>mesh['bind'][head][1,3]+.10*np.ptp(mesh['positions'][:,1]))
+   self.assertGreater(core.sum(),20)
+   for slug in ['kirby','jigglypuff']:
+    target=load(GAME,next(t for t in TARGETS if t[0]==slug));profile=fit(mesh,target)
+    profile['ball_fit']={'version':1,'radius':4.3}
+    fitted=conform(mesh,target['skeleton'],profile)
+    np.testing.assert_array_equal(fitted['triangles'],mesh['triangles'])
+    np.testing.assert_array_equal(fitted['uv'],mesh['uv'])
+    self.assertTrue(np.isfinite(fitted['positions']).all())
+    self.assertTrue(np.isfinite(fitted['normals']).all())
+    x=mesh['positions'][core];y=fitted['positions'][core]
+    affine=np.linalg.lstsq(np.c_[x,np.ones(len(x))],y,rcond=None)[0]
+    singular=np.linalg.svd(affine[:3],compute_uv=False)
+    self.assertLess(singular.max()/singular.min(),1.001)
+    np.testing.assert_allclose(np.c_[x,np.ones(len(x))]@affine,y,atol=1e-6)
+    for env in fitted['envelopes']:self.assertAlmostEqual(sum(w for _,w in env),1,places=5)
+    joints={j for env in fitted['envelopes'] for j,w in env if w>.9}
+    for name in ['Head','L_Hand','R_Hand','L_Foot','R_Foot']:self.assertIn(profile['joint_map'][name],joints)
+
+ @unittest.skipUnless(SOURCE.exists() and (ROOT/'build/retarget-roster-probe/kirby/poses.json').exists(),'Local pose samples required')
+ def test_ball_hand_clearance_keeps_authored_shoes(self):
+  import json
+  from tools.fit_ball_hands import fit_hands
+  mesh=GLB(SOURCE).mesh();target=load(GAME,next(t for t in TARGETS if t[0]=='kirby'));profile=fit(mesh,target)
+  profile['ball_fit']={'version':1,'radius':4.3}
+  samples=json.loads((ROOT/'build/retarget-roster-probe/kirby/poses.json').read_text()).get('clearancePoses')
+  if not samples:self.skipTest('Regenerate sampled clearance poses')
+  before=conform(mesh,target['skeleton'],profile);updated=fit_hands(mesh,target['skeleton'],profile,samples);after=conform(mesh,target['skeleton'],updated)
+  hands=updated['ball_fit']['hand_clearance']['hands']
+  self.assertGreater(sum(r['before_inside'] for r in hands.values()),0)
+  self.assertEqual(sum(r['after_inside'] for r in hands.values()),0)
+  footids=[mesh['names'].index(n) for n in ['L_Foot','L_ToeBase','R_Foot','R_ToeBase']]
+  shoes=np.where(np.isin(mesh['joints'],footids),mesh['weights'],0).sum(axis=1)>.9
+  np.testing.assert_allclose(before['positions'][shoes],after['positions'][shoes],atol=1e-8)
+  np.testing.assert_array_equal(mesh['uv'][shoes],after['uv'][shoes])
+  self.assertIs(after['image'],mesh['image'])
