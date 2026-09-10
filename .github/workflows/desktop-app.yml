@@ -82,11 +82,15 @@ jobs:
           else
             python tools/verify_desktop_package.py build/desktop-artifacts/linux-unpacked/resources
           fi
+      - name: Record artifact versions and checksums
+        run: python tools/desktop_artifact_manifest.py
       - uses: actions/upload-artifact@v4
         with:
           name: opensmash-melee-${{ matrix.key }}-${{ github.sha }}
           path: |
             build/desktop-artifacts/*.zip
             build/desktop-artifacts/*.tar.gz
+            build/desktop-artifacts/build-manifest.json
+            build/desktop-artifacts/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
