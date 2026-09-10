@@ -114,9 +114,19 @@ def attachment_rotations(skeleton, original_path, fighter, fit):
 
 def attachment_transform(skeleton, fighter, index, profile):
     anchors={'link':{26:25,70:69,71:69},'marth':{76:75}}
-    anchor_index=anchors.get(fighter,{}).get(index,index)
-    bind=np.linalg.inv(skeleton[index]['inverse_bind'])
-    anchor=np.linalg.inv(skeleton[anchor_index]['inverse_bind'])
+    anchor_index=profile.get('attachment_anchors',{}).get(str(index),anchors.get(fighter,{}).get(index,index))
+    def bind_matrix(i):
+        if skeleton[i]['inverse_bind'] is not None:return np.linalg.inv(skeleton[i]['inverse_bind'])
+        # Rigid-only weapon tips may omit an envelope inverse bind. TRS is
+        # authoritative here only when every ancestor has unit scale.
+        ancestor=i
+        while ancestor is not None:
+            if not np.allclose(skeleton[ancestor]['scale'],[1,1,1],atol=1e-7,rtol=0):
+                raise ValueError('Unbound attachment with scaled ancestry requires HSD matrix capture')
+            ancestor=skeleton[ancestor]['parent']
+        return np.asarray(skeleton[i]['world'])
+    bind=bind_matrix(index)
+    anchor=bind_matrix(anchor_index)
     correction=np.eye(4)
     correction[:3,:3]=np.array(profile.get('attachment_rotations',{}).get(str(anchor_index),np.eye(3)))*profile.get('attachment_scale',1.)
     correction[:3,3]=profile.get('attachment_offsets',{}).get(str(anchor_index),[0.,0.,0.])

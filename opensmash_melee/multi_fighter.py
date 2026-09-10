@@ -63,7 +63,13 @@ def fit(mesh,target):
     def segment(names,old,start,end,target_end,scale_override=None):
         joint=indices[old];origin=bind[start][:3,3];dest=tb[joint][:3,3]
         av=ORIENTATION@(bind[end][:3,3]-origin);bv=tb[indices[target_end]][:3,3]-dest
-        if min(np.linalg.norm(av),np.linalg.norm(bv))<1e-7:raise ValueError(f'Degenerate segment {start}')
+        if np.linalg.norm(av)<1e-7:raise ValueError(f'Degenerate source segment {start}')
+        if np.linalg.norm(bv)<1e-7:
+            if not target.get('allow_collapsed_segments'):raise ValueError(f'Degenerate segment {start}')
+            # A mitten/blob rig may intentionally share anatomical anchors.
+            # Keep volume instead of generating a singular zero-length fit.
+            bv=av
+            scale_override=body_scale if scale_override is None else scale_override
         length=np.linalg.norm(bv)/np.linalg.norm(av) if scale_override is None else scale_override
         axis=av/np.linalg.norm(av);stretch=body_scale*np.eye(3)+(length-body_scale)*np.outer(axis,axis)
         affine=np.eye(4);affine[:3,:3]=rotation_between(av,bv)@stretch@ORIENTATION
@@ -83,6 +89,7 @@ def fit(mesh,target):
         segment([side+'_Forearm',side+'_ForearmTwist01',side+'_ForearmTwist02'],elbow,side+'_Forearm',side+'_Hand',hand)
         virtual=bind[side+'_Hand'].copy();virtual[:3,3]+=bind[side+'_Hand'][:3,3]-bind[side+'_Forearm'][:3,3];bind['__'+side+'_hand']=virtual
         hand_scale=np.linalg.norm(tb[indices[hand]][:3,3]-tb[indices[elbow]][:3,3])/np.linalg.norm(bind[side+'_Hand'][:3,3]-bind[side+'_Forearm'][:3,3])
+        if hand_scale<1e-7 and target.get('allow_collapsed_segments'):hand_scale=body_scale
         segment([side+'_Hand'],hand,side+'_Hand','__'+side+'_hand',finger,hand_scale)
         segment([side+'_Thigh',side+'_ThighTwist01',side+'_ThighTwist02'],thigh,side+'_Thigh',side+'_Calf',knee)
         segment([side+'_Calf',side+'_CalfTwist01',side+'_CalfTwist02'],knee,side+'_Calf',side+'_Foot',foot)

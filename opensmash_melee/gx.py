@@ -129,6 +129,43 @@ def material(archive, image):
     return mobj
 
 
+def isolate_body_texture_animation(archive, symbol, dobj_index, image):
+    """Keep fighter-required animation objects, but use custom texture frames.
+
+    Fighter texture tables require the original animation ids/counts. Removing
+    those objects asserts during load. Clone only the selected material's lists
+    and replace its image frames, leaving other materials and gear untouched.
+    """
+    root=archive.roots().get(symbol.removesuffix('_joint')+'_matanim_joint')
+    if root is None:return False
+    field=root+8;node=archive.ptr(field)
+    for index in range(dobj_index+1):
+        if node is None:return False
+        clone=archive.append(bytes(archive.data[node:node+16]))
+        for offset in (0,4,8,12):archive.pointer(clone+offset,archive.ptr(node+offset))
+        archive.pointer(field,clone)
+        if index==dobj_index:
+            texture=archive.ptr(clone+8);link=clone+8;seen=set()
+            while texture is not None:
+                if texture in seen:raise ValueError('Cyclic texture animation list')
+                seen.add(texture);archive.check(texture,24)
+                copied=archive.append(bytes(archive.data[texture:texture+24]))
+                for offset in (0,8,12,16):archive.pointer(copied+offset,archive.ptr(texture+offset))
+                archive.pointer(link,copied)
+                count=archive.unpack('H',texture+20)[0]
+                if count>4096:raise ValueError('Unreasonable texture animation frame count')
+                if count:
+                    table=archive.alloc(count*4)
+                    for frame in range(count):archive.pointer(table+frame*4,image)
+                    archive.pointer(copied+12,table)
+                # The replacement image is RGBA8; old paletted frames do not apply.
+                archive.pointer(copied+16,None);archive.pack('H',copied+22,0)
+                link=copied;texture=archive.ptr(texture)
+            return True
+        field=clone;node=archive.ptr(node)
+    return False
+
+
 def replace_costume(archive, mesh, skeleton, profile):
     owner_index = profile['mesh_joint']
     if type(owner_index) is not int or not 0 <= owner_index < len(skeleton):
@@ -143,6 +180,10 @@ def replace_costume(archive, mesh, skeleton, profile):
     dobj_index = profile.get('mesh_dobj',0)
     selected = None
     visited = set()
+    from .target_presentation import ATTACHMENTS
+    attachments=profile.get('preserve_attachment_joints',ATTACHMENTS.get(profile.get('base_fighter'), []))
+    if any(type(i) is not int or not 0 <= i < len(skeleton) for i in attachments):
+        raise ValueError('Invalid preserved attachment joint')
     for j in skeleton:
         d, index = j['dobj'],0
         while d is not None:
@@ -154,13 +195,12 @@ def replace_costume(archive, mesh, skeleton, profile):
                 selected = d
             # Keep every DObj and its material descriptor alive for fighter
             # material/visibility tables; suppress only its original geometry.
-            from .target_presentation import ATTACHMENTS
-            if j['index'] not in ATTACHMENTS.get(profile.get('base_fighter'), []):
+            if j['index'] not in attachments:
                 archive.pointer(d+12,None)
             d = archive.ptr(d+4)
             index += 1
     from .target_presentation import transform_rigid_attachment, attachment_transform
-    for index in ATTACHMENTS.get(profile.get('base_fighter'), []):
+    for index in attachments:
         transform=attachment_transform(skeleton,profile.get('base_fighter'),index,profile)
         transform_rigid_attachment(archive,skeleton[index],[0.,0.,0.],transform=transform)
     if selected is None:
@@ -172,6 +212,9 @@ def replace_costume(archive, mesh, skeleton, profile):
         pobj,count = polygons(archive,mesh,skeleton)
     archive.pointer(selected+12,pobj)
     archive.pointer(selected+8,material(archive,mesh['image']))
+    if profile.get('isolate_body_texture_animation'):
+        if owner_index!=0:raise ValueError('Material animation isolation currently requires the root DObj')
+        isolate_body_texture_animation(archive,profile['symbol'],dobj_index,archive.ptr(archive.ptr(archive.ptr(selected+8)+8)+76))
     if "presentation" in mesh:
         from .presentation import attach, portrait_fit
         attach(archive,selected,mesh["presentation"],portrait_fit(mesh,skeleton,profile),profile.get("stature"))
