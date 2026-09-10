@@ -12,6 +12,7 @@ def build(inputs,out):
         if not path.is_relative_to(source.resolve()) or hashlib.sha256(path.read_bytes()).hexdigest()!=digest:raise ValueError('Build input integrity failure: '+name)
     runtime=source/'runtime';host=ROOT/'build/desktop-runtime-host';module=ROOT/'build/desktop-runtime-module'
     flags=['-DCMAKE_BUILD_TYPE=Release','-DUSE_SYSTEM_LIBS=OFF','-DENABLE_QT=OFF','-DENABLE_TESTS=OFF','-DUSE_DISCORD_PRESENCE=OFF','-DUSE_MGBA=OFF','-DUSE_RETRO_ACHIEVEMENTS=OFF','-DENABLE_AUTOUPDATE=OFF','-DENABLE_ANALYTICS=OFF','-DUSE_UPNP=OFF','-DMODERNGEKKO_GAMECUBE_CONTROLLERS=ON','-DMODERNGEKKO_APP_BUNDLE=OFF','-DOPENSMASH_NATIVE_SOURCE='+str(ROOT/'runtime'),'-DOPENSMASH_DESKTOP_SOURCE='+str(ROOT/'desktop')]
+    if os.name=='nt':flags+=['-DCMAKE_CXX_FLAGS=-Wno-microsoft-include']
     if sys.platform=='darwin':flags+=['-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0','-DENABLE_VULKAN=OFF']
     run('cmake','-S',runtime,'-B',host,'-G','Ninja',*flags)
     jobs=str(min(os.cpu_count() or 2,8))

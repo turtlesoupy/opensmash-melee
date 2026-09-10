@@ -1,6 +1,11 @@
 name: Native runtime payloads
 on:
   workflow_dispatch:
+    inputs:
+      windows_only:
+        description: Build only Windows while other platform artifacts are retained
+        type: boolean
+        default: false
 permissions:
   contents: write
 jobs:
@@ -8,11 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - {os: macos-15, key: macos-arm64}
-          - {os: macos-15-intel, key: macos-x64}
-          - {os: ubuntu-24.04, key: linux-x64}
-          - {os: windows-2025, key: windows-x64}
+        include: ${{ fromJSON(inputs.windows_only && '[{"os":"windows-2025","key":"windows-x64"}]' || '[{"os":"macos-15","key":"macos-arm64"},{"os":"macos-15-intel","key":"macos-x64"},{"os":"ubuntu-24.04","key":"linux-x64"},{"os":"windows-2025","key":"windows-x64"}]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     steps:
@@ -45,6 +46,7 @@ jobs:
           path: build/native-runtime-${{ matrix.key }}.zip
           retention-days: 30
   publish:
+    if: ${{ !inputs.windows_only }}
     needs: runtime
     runs-on: ubuntu-24.04
     steps:
