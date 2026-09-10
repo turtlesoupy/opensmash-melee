@@ -52,6 +52,8 @@ def build(inputs, out):
     if os.name == "nt":
         pch = runtime / "vendor/dolphin/Source/PCH/CMakeLists.txt"
         pch.write_text(pch.read_text().replace("#return()", "return()"))
+        aes=runtime/"vendor/dolphin/Source/Core/Common/Crypto/AES.cpp"
+        aes.write_text(aes.read_text().replace("#ifdef _MSC_VER\n#define ATTRIBUTE_TARGET(x)", "#if defined(_MSC_VER) && !defined(__clang__)\n#define ATTRIBUTE_TARGET(x)"))
     flags = [
         "-DCMAKE_BUILD_TYPE=Release",
         "-DUSE_SYSTEM_LIBS=OFF",
