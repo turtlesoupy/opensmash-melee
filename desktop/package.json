@@ -5,7 +5,7 @@
   "private": true,
   "description": "Shared OpenSmash launcher with a native Melee runtime",
   "author": "OpenSmash contributors",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "main": "main.cjs",
   "scripts": {
     "dev": "electron .",
@@ -47,6 +47,10 @@
       {
         "from": "../build/desktop-characters",
         "to": "characters"
+      },
+      {
+        "from": "licenses",
+        "to": "licenses"
       }
     ],
     "mac": {

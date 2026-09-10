@@ -69,6 +69,7 @@ def stage(freeze=True):
             str(ROOT / "build/desktop-freeze"),
             "--collect-all",
             "PIL",
+            *[arg for name in ["numpy","scipy","Pillow","pyinstaller"] for arg in ["--copy-metadata",name]],
             *imports,
             str(ROOT / "desktop/backend_entry.py"),
         ],
