@@ -1,9 +1,11 @@
 import AppKit
 
-final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate, NSComboBoxDelegate {
     let build:Build
     var window:NSWindow!, status:NSTextField!, play:NSButton!, mode:NSPopUpButton!, stage:NSPopUpButton!
     var level:NSTextField!, stocks:NSTextField!, minutes:NSTextField!, chosen:NSComboBox!
+    var targets=[NSPopUpButton]()
+    let targetIDs=[-1,8,7,0,2,9,6]
     var devices=[NSPopUpButton](), characters=[NSComboBox](), characterKeys=[String](), characterNames=[String]()
     var playActivity:NSObjectProtocol?
     var launchTimer:Timer?, launchReady=false, launchStarted=Date(), progress:NSProgressIndicator!
@@ -27,7 +29,7 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let view=NSPopUpButton(frame:NSRect(x:x,y:y,width:width,height:28));view.addItems(withTitles:names);view.font = .systemFont(ofSize:13);window.contentView!.addSubview(view);return view
     }
     func combo(_ names:[String],_ x:CGFloat,_ y:CGFloat,_ width:CGFloat)->NSComboBox {
-        let view=NSComboBox(frame:NSRect(x:x,y:y,width:width,height:28));view.addItems(withObjectValues:names);view.completes=true;view.numberOfVisibleItems=12;view.font = .systemFont(ofSize:13);window.contentView!.addSubview(view);return view
+        let view=NSComboBox(frame:NSRect(x:x,y:y,width:width,height:28));view.addItems(withObjectValues:names);view.delegate=self;view.completes=true;view.numberOfVisibleItems=12;view.font = .systemFont(ofSize:13);window.contentView!.addSubview(view);return view
     }
     func number(_ value:Int,_ x:CGFloat,_ y:CGFloat)->NSTextField {
         let view=NSTextField(string:String(value));view.frame=NSRect(x:x,y:y,width:80,height:28);view.font = .monospacedDigitSystemFont(ofSize:14,weight:.medium);view.alignment = .center;window.contentView!.addSubview(view);return view
@@ -65,10 +67,13 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 player.textColor = i==0 ? accent : .labelColor
                 let device=popup(["Keyboard","Gamepad 1","Gamepad 2","Gamepad 3","Gamepad 4","CPU","Off"],108,y,170)
                 device.selectItem(at:deviceKeys.firstIndex(of:settings.ports[i].device) ?? 6);devices.append(device)
-                let character=combo(["Selected fighter"]+characterNames,294,y,440)
+                let character=combo(["Selected fighter"]+characterNames,294,y,252)
                 character.selectItem(at:settings.ports[i].character=="selected" ? 0 : (characterKeys.firstIndex(of:settings.ports[i].character).map{$0+1} ?? 0));characters.append(character)
+                let target=popup(["Default target","Mario","Luigi","Captain Falcon","Fox","Marth","Link"],552,y,182)
+                target.selectItem(at:targetIDs.firstIndex(of:settings.ports[i].target ?? -1) ?? 0);targets.append(target)
             }
-            label("Stage and rules prefill VS. Classic uses player 1. Full Boot follows Melee’s original flow.",24,142,720).font = .systemFont(ofSize:11)
+            refreshTargets()
+            label("Target selects the Melee body / moveset for customs. Default uses the original assignment.",24,142,720).font = .systemFont(ofSize:11)
             status=label("Choose your Melee USA v1.02 ROM to play.",54,98,670)
             progress=NSProgressIndicator(frame:NSRect(x:26,y:98,width:18,height:18));progress.style = .spinning;progress.isDisplayedWhenStopped=false;window.contentView!.addSubview(progress)
             status.font = .systemFont(ofSize:13);status.textColor = .labelColor
@@ -77,6 +82,24 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate {
             window.makeKeyAndOrderFront(nil);NSApp.activate(ignoringOtherApps:true)
             chooseROM()
         } catch { showError(error) }
+    }
+    func comboBoxSelectionDidChange(_ notification:Notification) {DispatchQueue.main.async {self.refreshTargets()}}
+    func controlTextDidChange(_ notification:Notification) {refreshTargets()}
+    func refreshTargets() {
+        guard targets.count==4 else{return}
+        for i in 0..<4 {
+            let box=characters[i].stringValue=="Selected fighter" ? chosen! : characters[i]
+            let key=characterNames.firstIndex(of:box.stringValue).map{characterKeys[$0]}
+            let custom=build.characters.first{$0.slug==key}
+            let available=custom.map{[$0.fighter]+($0.targets ?? []).map{$0.fighter}} ?? []
+            let original=custom.flatMap{character in schema.fighters.first{$0.id==character.fighter}?.label}
+            targets[i].item(at:0)?.title=original.map{"Default: " + $0} ?? "Melee target"
+            targets[i].autoenablesItems=false
+            for j in 1..<targetIDs.count {targets[i].item(at:j)?.isEnabled=available.contains(targetIDs[j])}
+            targets[i].isEnabled=custom != nil
+            targets[i].toolTip="Melee skeleton and moveset. Only bundled retargets are available."
+            if !available.contains(targetIDs[targets[i].indexOfSelectedItem]) {targets[i].selectItem(at:0)}
+        }
     }
     func chooseROM() {
         var rom:URL?
@@ -102,7 +125,7 @@ final class Application: NSObject, NSApplicationDelegate, NSWindowDelegate {
         do {
             guard let cpu=Int(level.stringValue),let stock=Int(stocks.stringValue),let time=Int(minutes.stringValue) else{throw Failure(message:"Enter whole numbers for CPU level, stocks and minutes.")}
             var ports=[Port]()
-            for i in 0..<4 {ports.append(Port(device:deviceKeys[devices[i].indexOfSelectedItem],character:try key(characters[i],selectedAllowed:true)))}
+            for i in 0..<4 {ports.append(Port(device:deviceKeys[devices[i].indexOfSelectedItem],character:try key(characters[i],selectedAllowed:true),target:targetIDs[targets[i].indexOfSelectedItem] == -1 ? nil : targetIDs[targets[i].indexOfSelectedItem]))}
             settings=LaunchSettings(mode:schema.modes[mode.indexOfSelectedItem].id,stage:schema.stages[stage.indexOfSelectedItem].id,level:cpu,stocks:stock,minutes:time,ports:ports)
             let plan=try launchPlan(settings,selected:try key(chosen,selectedAllowed:false),characters:build.characters,schema:schema)
             try JSONEncoder().encode(settings).write(to:support.appendingPathComponent("launch-settings.json"),options:.atomic)

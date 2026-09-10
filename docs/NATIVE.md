@@ -163,3 +163,34 @@ This uses the already-verified local game import and copies settings into an
 isolated user directory. It saves three 30-second frame-time windows after
 warm-up, with capture explicitly disabled. See `docs/PERFORMANCE.md` for measured
 results and remaining limitations.
+
+### Picking a retarget for smoke tests
+
+Each player row has a target dropdown beside the custom character. **Default**
+shows the original assignment (for example, Captain Falcon for Abraham Lincoln).
+Choose Mario, Luigi, Captain Falcon, Fox, Marth, or Link to change both the fitted
+skeleton and the Melee moveset. Choices persist with launch settings. Standard
+Melee characters do not use this override. Only bundled targets are enabled;
+unsupported choices fail explicitly instead of silently falling back.
+
+In a full local checkout, build alternate costumes for cached roster characters
+before packaging the native app:
+
+```sh
+python3 tools/build_retarget_options.py
+# Or only one character:
+python3 tools/build_retarget_options.py abrahamlincoln
+```
+
+Then run the usual native packaging command with `--reuse-build` and a new output
+path. The app packages the generated targets, including compact textures for
+large lineups. Generation runs the source-proportion checks; a successful build
+does not certify every animation or target's visual quality. To exercise every
+bundled target for one character in isolated headless combat:
+
+```sh
+python3 tools/test_native_targets.py --app 'build/native/OpenSmash Melee.app' \
+  --rom /path/to/melee.iso --character abrahamlincoln --output build/target-smoke
+```
+
+These are native launcher controls; the web roster's assignment is unchanged.

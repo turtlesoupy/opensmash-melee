@@ -187,7 +187,7 @@ def package(output, character_id=None):
         from opensmash_melee.materials import upgrade_cached_lighting
         catalog_path = ROOT / 'web/public/catalog.json'
         catalog = json.loads(catalog_path.read_text()) if catalog_path.exists() else []
-        characters = []
+        characters = []; retargets = {}
         ids = {('web-v1-' + hashlib.sha256(r['slug'].encode()).hexdigest()[:16]): r for r in catalog}
         folders = sorted((ROOT / 'build/characters').glob('web-v1-*'))
         if character_id and ROOT / 'build/characters' / character_id not in folders:
@@ -207,6 +207,8 @@ def package(output, character_id=None):
             if optimized.is_file(): source = optimized
             lit_source = upgrade_cached_lighting(source.read_bytes())
             row = ids.get(folder.name, {'slug':folder.name, 'name':folder.name})
+            retarget = json.loads((folder / 'retarget.json').read_text()) if (folder / 'retarget.json').exists() else None
+            if '-target-' in folder.name and retarget is None: continue
             variants = []; compact_variants=[]
             compact=compact_costume(folder,source)
             for color, slot in enumerate(SCHEMA['costumes'][str(fighter)]):
@@ -219,7 +221,12 @@ def package(output, character_id=None):
                     compact_target=resources/compact_name;compact_target.parent.mkdir(parents=True,exist_ok=True)
                     compact_target.write_bytes(costume_variant(compact,fighter,color))
                     compact_variants.append({'filename':slot['filename'],'path':compact_name,'sha256':digest(compact_target)})
+            if retarget:
+                retargets.setdefault(retarget['slug'], []).append({'fighter':fighter,'costumes':variants,'compactCostumes':compact_variants or None})
+                continue
             characters.append({'slug':row['slug'], 'name':row['name'], 'fighter':fighter, 'costumes':variants,'compactCostumes':compact_variants or None})
+        for character in characters:
+            character['targets'] = retargets.get(character['slug'], [])
         info['characters'] = characters
         info['selected'] = ids.get(character_id, {}).get('slug', character_id) if character_id else 'vanilla:8'
         # All lineups start from the verified, unmodified imported game.

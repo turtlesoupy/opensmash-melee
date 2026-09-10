@@ -27,7 +27,8 @@ def verify(app):
         assert digest(resources / build['costume']) == build['costumeSha256']
     schema = json.loads((resources / 'launch-options.json').read_text())
     assert [m['id'] for m in schema['modes']] == list(range(5))
-    for character in build['characters']:
+    variants = [variant for character in build['characters'] for variant in [character] + character.get('targets', [])]
+    for character in variants:
         slots = schema['costumes'][str(character['fighter'])]
         assert len(character['costumes']) == len(slots)
         for variants in [character['costumes'], character.get('compactCostumes') or []]:

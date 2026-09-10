@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FILES = [
     'tools/specialize_native_math.py', 'tools/specialize_browser_math.py', 'tools/build_native.py', 'tools/build-native-macos.command',
     'tools/prepare_moderngekko.py', 'tools/verify_native_package.py',
-    'tools/test_native_first_run.py', 'tools/test_native_launch_modes.py', 'tests/test_native_build.py',
+    'tools/test_native_first_run.py', 'tools/test_native_launch_modes.py', 'tools/test_native_targets.py', 'tests/test_native_build.py', 'tests/test_native_target_options.py',
     'tools/package_native_sources.py',
     'runtime/upstream.json', 'runtime/mods/launch_match.c', 'runtime/native/main.swift',
     'runtime/launch-options.json', 'runtime/native/LaunchOptions.swift',

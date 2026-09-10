@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 
 struct Choice: Codable { let id:Int; let label:String }
-struct Port: Codable { var device:String; var character:String }
+struct Port: Codable { var device:String; var character:String; var target:Int? = nil }
 struct LaunchSettings: Codable {
     var mode:Int; var stage:Int; var level:Int; var stocks:Int; var minutes:Int; var ports:[Port]
 }
@@ -10,7 +10,8 @@ struct LaunchSchema: Decodable {
     let modes:[Choice]; let stages:[Choice]; let fighters:[Choice]; let defaults:LaunchSettings
 }
 struct Costume: Codable { let filename:String; let path:String; let sha256:String }
-struct Character: Codable { let slug:String; let name:String; let fighter:Int; let costumes:[Costume]; let compactCostumes:[Costume]? }
+struct Retarget: Codable { let fighter:Int; let costumes:[Costume]; let compactCostumes:[Costume]? }
+struct Character: Codable { let slug:String; let name:String; let fighter:Int; let costumes:[Costume]; let compactCostumes:[Costume]?; var targets:[Retarget]? = nil }
 struct LaunchPlan {
     var settings:LaunchSettings
     let packed:[Int]
@@ -37,7 +38,11 @@ func launchPlan(_ input:LaunchSettings, selected:String, characters:[Character],
         guard ["keyboard","gamepad0","gamepad1","gamepad2","gamepad3","cpu","off"].contains(p.device) else { throw Failure(message:"Invalid controller.") }
         if p.device != "cpu" && p.device != "off" && !devices.insert(p.device).inserted { throw Failure(message:"Assign each controller to only one player.") }
         let key=p.character=="selected" ? selected : p.character
-        let custom=characters.first{$0.slug==key}
+        var custom=characters.first{$0.slug==key}
+        if let target=p.target, let original=custom, target != original.fighter {
+            guard let variant=original.targets?.first(where:{$0.fighter==target}) else {throw Failure(message:"This target is not bundled for \(original.name). Choose Default or build its retarget first.")}
+            custom=Character(slug:original.slug,name:original.name,fighter:target,costumes:variant.costumes,compactCostumes:variant.compactCostumes)
+        }
         guard let fighter=custom?.fighter ?? (key.hasPrefix("vanilla:") ? Int(key.dropFirst(8)) : nil), (0...25).contains(fighter) else { throw Failure(message:"Choose a valid character for each player.") }
         entries.append((p,fighter,custom))
         if custom == nil && p.device != "off" { used[fighter]=["vanilla":0] }
@@ -63,8 +68,10 @@ func launchPlan(_ input:LaunchSettings, selected:String, characters:[Character],
     if costumes.count>=3 {
         costumes=costumes.map { costume in
             for character in characters {
-                if let index=character.costumes.firstIndex(where:{$0.path==costume.path}),
-                   let compact=character.compactCostumes,index<compact.count {return compact[index]}
+                let variants=[Retarget(fighter:character.fighter,costumes:character.costumes,compactCostumes:character.compactCostumes)]+(character.targets ?? [])
+                for variant in variants {
+                    if let index=variant.costumes.firstIndex(where:{$0.path==costume.path}), let compact=variant.compactCostumes,index<compact.count {return compact[index]}
+                }
             }
             return costume
         }
