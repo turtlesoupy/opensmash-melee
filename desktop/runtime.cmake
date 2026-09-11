@@ -27,3 +27,7 @@ if(MSVC)
   endif()
  endforeach()
 endif()
+
+if(WIN32)
+ target_link_libraries(moderngekko PUBLIC videod3d videod3d12)
+endif()
