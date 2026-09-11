@@ -56,6 +56,8 @@ def build(inputs, out):
             )
         )
     if os.name == "nt":
+        fzero = runtime / "vendor/dolphin/Source/Core/Core/HW/Triforce/FZeroAX.cpp"
+        fzero.write_text("#include <functional>\n" + fzero.read_text())
         timing = runtime / "vendor/dolphin/Source/Core/VideoCommon/LightweightFrameTimingRecorder.cpp"
         timing_text = timing.read_text().replace('#include <ctime>', '#include <ctime>\n#define WIN32_LEAN_AND_MEAN\n#define NOMINMAX\n#include <windows.h>')
         start = timing_text.index('  timespec time{};')
