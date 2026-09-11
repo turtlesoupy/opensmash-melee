@@ -56,6 +56,9 @@ def build(inputs, out):
             )
         )
     if os.name == "nt":
+        # clang-cl uses the MSVC frontend, even though its compiler ID is Clang.
+        implot = runtime / "vendor/dolphin/Externals/implot/CMakeLists.txt"
+        implot.write_text(implot.read_text().replace("CXX_COMPILER_ID:MSVC", "BOOL:${MSVC}"))
         pch = runtime / "vendor/dolphin/Source/PCH/CMakeLists.txt"
         pch.write_text(pch.read_text().replace("#return()", "return()"))
         vendor_cmake = runtime / "vendor/dolphin/CMakeLists.txt"

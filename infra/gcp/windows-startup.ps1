@@ -45,7 +45,7 @@ python infra/gcp/worker.py --build "$env:RELEASE_BUILD" --platform "$env:RELEASE
 exit /b %errorlevel%
 "@ | Set-Content C:\run-build.cmd
 & cmd.exe /c C:\run-build.cmd
-$result = $LASTEXITCODE
+$buildExitCode = $LASTEXITCODE
 Stop-Transcript
 @'
 import os
@@ -66,4 +66,4 @@ if ($LASTEXITCODE -eq 0) { $reported = $true }
   }
   # Coordinator deletes us; if it disappears, the GCE runtime deadline deletes us.
 }
-exit $result
+exit $buildExitCode

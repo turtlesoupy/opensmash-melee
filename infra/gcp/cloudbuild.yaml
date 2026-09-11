@@ -4,11 +4,6 @@ steps:
     name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
     entrypoint: bash
     args: ['infra/gcp/python.sh', 'infra/gcp/coordinator.py', 'stage', '--tag', '$TAG_NAME', '--commit', '$COMMIT_SHA', '--build', '$BUILD_ID']
-  - id: linux
-    waitFor: ['stage']
-    name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
-    entrypoint: bash
-    args: ['infra/gcp/python.sh', 'infra/gcp/coordinator.py', 'run', '--platform', 'linux-x64', '--build', '$BUILD_ID']
   - id: windows
     waitFor: ['stage']
     name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
