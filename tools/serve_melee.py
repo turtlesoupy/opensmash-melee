@@ -113,6 +113,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json(SETUP.status())
             if route.startswith('/api/game') and not SETUP.ready:
                 return self.json({'error': 'Choose and verify your Melee ISO first.'}, 409)
+            if route.startswith('/api/announcer/'):
+                slug = route.removeprefix('/api/announcer/')
+                if slug not in CATALOG:
+                    raise FileNotFoundError(slug)
+                ident = 'web-v1-' + hashlib.sha256(slug.encode()).hexdigest()[:16]
+                imported = ROOT / 'assets/characters' / ident / 'announcer.wav'
+                return self.file(imported if imported.is_file() else descendant(CHARACTERS, slug + '/announcer.wav'))
             if route == '/api/imports':
                 return self.json(list(IMPORTS.rows))
             if NATIVE and route == '/catalog.json':return self.file(ROOT/'web/public/catalog.json')

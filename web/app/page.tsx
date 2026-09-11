@@ -1,4 +1,5 @@
 import Controls from "./Controls";
+import {announceCharacter, stopAnnouncer} from "@/lib/announcer";
 import {preferences} from '@/lib/desktop';
 import { useEffect, useMemo, useRef, useState } from "react";
 import Game from "./Game";
@@ -33,6 +34,16 @@ export const names: Record<string, string> = {
 const ranks = new Map(order.map((slug, index) => [slug, index]));
 export default function Home() {
   const [gameReady,setGameReady]=useState(false);
+  useEffect(() => {
+    const hidden = () => { if (document.hidden) stopAnnouncer(); };
+    document.addEventListener('visibilitychange', hidden);
+    window.addEventListener('blur', stopAnnouncer);
+    return () => {
+      document.removeEventListener('visibilitychange', hidden);
+      window.removeEventListener('blur', stopAnnouncer);
+      stopAnnouncer();
+    };
+  }, []);
   const [settings, setSettings] = useState(loadSettings);
   const [roster, setRoster] = useState<Fighter[]>([]),
     [query, setQuery] = useState(""),
@@ -77,6 +88,7 @@ export default function Home() {
   const choose = (fighter: Fighter) => {
     if(!gameReady){setError("Choose and verify your Melee ISO in the boot screen first.");frame.current?.scrollIntoView({block:"start"});return;}
     setError("");
+    announceCharacter(fighter.slug);
     void unlockAudio().catch(() => {});
     setSelected({ id: ++launchId.current, fighter, settings: structuredClone(settings) });
     frame.current?.scrollIntoView({ block: "start", behavior: "instant" });

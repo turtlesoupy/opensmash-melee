@@ -23,6 +23,10 @@ not loaded. The shared introduction trailer is embedded credentiallessly so
 that Melee keeps cross-origin isolation. Selecting a fighter unmounts the trailer
 and pauses roster decoration; it starts a human-controlled Melee session in the
 same frame. Settings retain all five launch modes and all four player ports.
-The original Create cell is currently a functional Random cell: the Melee
-picker imports characters from the OpenSmash pipeline, and does not implement
-the original hosted character-generation/account service.
+The Create cell uses the original plus icon and opens the Melee import dialog.
+
+`kanit.css` loads the same normal and italic weights (400–900) as OpenSmash,
+from bundled Google Fonts Kanit files in `public/brand/kanit`; OFL.txt is included.
+`launcher-controls.css` copies OpenSmash's button and settings layout rules with
+selectors adapted to the Melee React components. Update these from upstream
+rather than introducing approximate button styling.
