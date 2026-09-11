@@ -112,6 +112,9 @@ def build(inputs, out):
         "-DOPENSMASH_NATIVE_SOURCE=" + str(ROOT / "runtime"),
         "-DOPENSMASH_DESKTOP_SOURCE=" + str(ROOT / "desktop"),
     ]
+    if os.name == "nt":
+        # SDK header mtimes differ on ephemeral builders; cached PCHs are not portable.
+        flags.append("-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON")
     if shutil.which("ccache"):
         flags += [
             "-DCMAKE_C_COMPILER_LAUNCHER=ccache",
