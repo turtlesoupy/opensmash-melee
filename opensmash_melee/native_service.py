@@ -299,6 +299,8 @@ class NativeService:
             if self.process and self.process.poll() is None:
                 raise ValueError("Close the current game first")
             packed, costumes = self.validate(plan)
+            if costumes and self.manifest.get("characterSelect") != 1:
+                raise ValueError("Update the desktop runtime to use character select injection.")
             self.controllers(plan["ports"])
             game = self.root / "build/native-lineup"
             stage = game.with_name("native-lineup-" + uuid.uuid4().hex)
@@ -315,6 +317,9 @@ class NativeService:
                     target = stage / "files" / name
                     target.unlink()
                     shutil.copy2(source, target)
+                if costumes:
+                    from .character_select import stage_character_select, catalog_identities
+                    stage_character_select(stage, catalog_identities(self.root, self.catalog, plan["costumes"]))
                 if game.exists():
                     shutil.rmtree(game)
                 stage.rename(game)

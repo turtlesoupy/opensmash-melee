@@ -29,8 +29,8 @@ export and source-shape gates. These builds are not browser gameplay evidence.
 | Combat | Native Dolphin and ModernGekko smoke tests; six custom moveset samples pass browser Battlefield combat/performance checks | Full action/mode coverage, match completion and multiple custom players |
 | Browser engine | Actual Melee static recompilation, WebGL 2, input and local roster launch | Repeated human matches, additional devices and multiplayer performance |
 | Browser validation | 195 animation streams; 24 GPU pose cases; bind/matrix gates | Dolphin trace/pose equivalence, browser/device matrix, four-player sustained performance |
-| Custom roster alongside vanilla | Four-port custom lineup planning; distinct costume colors preserve a simultaneous vanilla fighter | Full-roster native conversion, in-game custom portraits/names |
-| Portrait/name/stock/emblem/announcer | Source assets imported and hashed | Runtime UI/audio integration |
+| Custom roster alongside vanilla | Four-port custom lineup planning; distinct costume colors preserve a simultaneous vanilla fighter | Full-roster native conversion, on-demand in-game roster loading |
+| Portrait/name/stock/emblem/announcer | Prepared lineup CSS portraits/names/announcers; results and HUD identity | Full-catalog in-game loading; standalone Swift CSS staging |
 | Name/photo generation, retry/resume/costs | Existing OpenSmash pipeline remains available | Wire Melee outputs into its product flow |
 | Download/share/public roster | Existing OpenSmash remains intact | Melee character packaging and product integration |
 | Local assets/offline behavior | Verified ISO extraction for local build; local browser lab | Browser-local loading/persistence and offline product flow |

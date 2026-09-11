@@ -12,9 +12,11 @@ hooks in `runtime/mods/launch_match.c`. Settings persist between launches.
 | Full Boot | Original intro/title | Original menus control the session |
 
 The scene redirect happens once. Subsequent Back, stage choice and mode changes
-use the original game flow. Menu portraits/names remain Melee's base fighters;
-custom costumes load when the game renders the character. Choosing another base
-or color in the original menu selects that slot's costume.
+use the original game flow. Classic launch settings are seeded only on the first
+entry, so returning to its roster preserves subsequent choices. Integrated desktop and browser launches stage custom
+portraits, names and announcers for their prepared lineup. The arrows in the
+original character select page through injected identities; see
+[Character select](CHARACTER_SELECT.md) for controls, validation and scope.
 
 Web: expand **Launch settings** above the roster, then click a character. Each
 port can use that roster selection, another searchable custom character, or a

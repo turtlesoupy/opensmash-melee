@@ -129,6 +129,11 @@ class Handler(BaseHTTPRequestHandler):
                                   'files': list(sizes), 'sizes': sizes})
             if route.startswith('/api/game/'):
                 return self.file(descendant(GAME, route[len('/api/game/'):]))
+            if route.startswith('/api/character-select/'):
+                name = route.removeprefix('/api/character-select/')
+                if not re.fullmatch(r'[a-f0-9]{64}/[0-3]\.bin', name):
+                    raise FileNotFoundError(name)
+                return self.file(descendant(ROOT / 'build/character-select', name))
             if route.startswith('/api/costume/'):
                 slug = route[len('/api/costume/'):]
                 if slug not in CATALOG:
@@ -203,6 +208,29 @@ class Handler(BaseHTTPRequestHandler):
                     return
         if (self.path == '/api/imports' or self.path.startswith('/api/prepare/')) and not SETUP.ready:
             return self.json({'error': 'Choose and verify your Melee ISO first.'}, 409)
+        if self.path == '/api/character-select':
+            if not SETUP.ready:
+                return self.json({'error': 'Choose and verify your Melee ISO first.'}, 409)
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                if not 0 < length <= 16384:
+                    raise ValueError('Invalid lineup request')
+                body = json.loads(self.rfile.read(length))
+                from opensmash_melee.character_select import catalog_identities, character_select_assets
+                entries = catalog_identities(ROOT, CATALOG, body.get('costumes'))
+                with LOCK:
+                    assets = character_select_assets(GAME, entries)
+                    key = hashlib.sha256(b''.join(assets.values())).hexdigest()
+                    folder = ROOT / 'build/character-select' / key
+                    folder.mkdir(parents=True, exist_ok=True)
+                    result = []
+                    for index, (name, data) in enumerate(assets.items()):
+                        path = folder / f'{index}.bin'
+                        if not path.exists(): atomic_write(path, data)
+                        result.append({'filename': name, 'url': f'/api/character-select/{key}/{index}.bin'})
+                return self.json({'assets': result})
+            except (ValueError, TypeError, AttributeError, OSError) as error:
+                return self.json({'error': str(error)}, 400)
         if self.path == '/api/imports':
             try:
                 length=int(self.headers.get('Content-Length','0'))

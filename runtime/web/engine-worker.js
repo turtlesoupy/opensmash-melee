@@ -29,6 +29,16 @@ self.onmessage = async ({data}) => {
         const padded=costumeSlot(bytes);new DataView(padded.buffer).setUint32(0,bytes.length);
         engine.FS.writeFile('/game/files/'+costume.filename,padded);costumeSizes.set(costume.filename,bytes.length);
       }
+      const cssNames=['MnSlChr.dat','MnSlChr.usd','audio/nr_select.ssm','audio/us/nr_select.ssm'];
+      for (const asset of data.cssAssets || []) {
+        const index=cssNames.indexOf(asset.filename);
+        if(index<0 || !engine._opensmash_css_size)throw Error('Update the Melee runtime to use character select injection.');
+        const bytes=new Uint8Array(await asset.blob.arrayBuffer());
+        if(!bytes.length || bytes.length>16*1024*1024)throw Error('Invalid character select asset.');
+        engine.FS.unlink('/game/files/'+asset.filename);
+        engine.FS.writeFile('/game/files/'+asset.filename,bytes);
+        engine._opensmash_css_size(index,bytes.length);
+      }
       report('session',{build:runtimeBuild,mode:startOptions.benchmark==='1'?'cpu-benchmark':'human',
         skin:data.skin||'host',character:data.character,fighter:data.fighter,profile:startOptions.profile||'0',
         resolution:[960,720],warm:true,launch:data.launch});
