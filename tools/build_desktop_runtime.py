@@ -70,6 +70,17 @@ def build(inputs, out):
   };
   return (ticks(kernel) + ticks(user)) * 100ULL;""" + timing_text[end:]
         timing.write_text(timing_text)
+        core_clock = runtime / "vendor/dolphin/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Run.cpp"
+        core_text = core_clock.read_text().replace('#include <ctime>', '#include <ctime>\n#define WIN32_LEAN_AND_MEAN\n#define NOMINMAX\n#include <windows.h>')
+        start = core_text.index('  timespec time{};')
+        end = core_text.index('\n}', start)
+        core_text = core_text[:start] + """  FILETIME created{}, exited{}, kernel{}, user{};
+  if (!GetThreadTimes(GetCurrentThread(), &created, &exited, &kernel, &user)) return 0;
+  const auto ticks = [](FILETIME t) {
+    return (static_cast<u64>(t.dwHighDateTime) << 32) | t.dwLowDateTime;
+  };
+  return (ticks(kernel) + ticks(user)) * 100ULL;""" + core_text[end:]
+        core_clock.write_text(core_text)
         # clang-cl supports target attributes but does not define __GNUC__.
         cull = runtime / "vendor/dolphin/Source/Core/VideoCommon/CPUCullImpl.h"
         cull.write_text(cull.read_text().replace("defined(__GNUC__)", "(defined(__GNUC__) || defined(__clang__))"))
