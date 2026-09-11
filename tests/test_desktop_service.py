@@ -73,6 +73,21 @@ class DesktopServiceTests(unittest.TestCase):
                 {**self.plan, "session": "00000000-0000-0000-0000-000000000001"}
             )
 
+    def test_windows_render_worker_has_bounded_gpu_lead(self):
+        import configparser
+
+        for system in ["win32", "darwin"]:
+            with self.subTest(system=system), patch(
+                "opensmash_melee.native_service.sys.platform", system
+            ), patch("opensmash_melee.native_service.subprocess.run", return_value=SimpleNamespace(stdout="")):
+                self.service.controllers(self.plan["ports"])
+                config = configparser.ConfigParser()
+                config.read(self.service.user / "Config/Dolphin.ini")
+                self.assertEqual(config.getboolean("Core", "CPUThread"), system == "win32")
+                if system == "win32":
+                    self.assertTrue(config.getboolean("Core", "SyncGPU"))
+                    self.assertEqual(config.getint("Core", "SyncGpuMaxDistance"), 1000000)
+
     def test_embedded_launch_rejects_old_runtime_before_spawning_window(self):
         with patch.dict("os.environ", {"OPENSMASH_SURFACE_SERVICE": "test-surface"}):
             with self.assertRaisesRegex(ValueError, "embedded-display update"):
@@ -98,6 +113,42 @@ class DesktopServiceTests(unittest.TestCase):
         self.service.stop(sid)
         with self.assertRaisesRegex(ValueError, "cancelled"):
             self.service.launch({**self.plan, "session": sid})
+
+    def test_stop_requests_cache_flush_before_terminating(self):
+        stop_file = self.service.root / "stop-request"
+        self.service.stop_file = stop_file
+
+        class Process:
+            returncode = None
+
+            def poll(self):
+                return self.returncode
+
+            def wait(self, timeout=None):
+                self_test.assertTrue(stop_file.exists())
+                self.returncode = 0
+                return 0
+
+            def terminate(self):
+                raise AssertionError("Terminated before the engine could save caches")
+
+        self_test = self
+        self.service.process = Process()
+        self.assertFalse(self.service.stop()["running"])
+        self.assertFalse(stop_file.exists())
+
+    def test_stop_kills_unresponsive_engine_after_grace_period(self):
+        import subprocess
+        from unittest.mock import Mock
+
+        process = Mock()
+        process.poll.side_effect = [None, -9, -9]
+        process.wait.side_effect = [subprocess.TimeoutExpired("engine", 8), -9]
+        self.service.process = process
+        self.service.stop_file = self.service.root / "stop-request"
+        self.service.stop()
+        process.terminate.assert_not_called()
+        process.kill.assert_called_once()
 
     def test_packed_ports_are_derived_not_trusted(self):
         self.plan["packedPorts"] = [999] * 4

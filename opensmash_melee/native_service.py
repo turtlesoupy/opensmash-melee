@@ -20,6 +20,7 @@ class NativeService:
         self.session = None
         self.cancelled = set()
         self.process = None
+        self.stop_file = None
         self.lock = threading.Lock()
         self.log = self.root / "build/native-session.log"
         self.user = self.root / "build/native-user"
@@ -72,12 +73,18 @@ class NativeService:
                 if session != self.session:
                     return self.status()
             if self.process and self.process.poll() is None:
-                self.process.terminate()
+                if self.stop_file is not None:
+                    self.stop_file.touch()
+                else:
+                    self.process.terminate()
                 try:
                     self.process.wait(timeout=8)
                 except subprocess.TimeoutExpired:
                     self.process.kill()
                     self.process.wait()
+            if self.stop_file is not None:
+                self.stop_file.unlink(missing_ok=True)
+                self.stop_file = None
             self.status_message = "Game closed."
         return self.status()
 
@@ -280,8 +287,18 @@ class NativeService:
                 ["Main Stick/Calibration = 100.00", "C-Stick/Calibration = 100.00"]
             )
         (config / "GCPadNew.ini").write_text("\n".join(lines) + "\n")
+        # Keep simulation and rendering on separate Windows workers, with the
+        # same bounded GPU lead used by the native runtime on iOS. Unbounded
+        # dual-core execution can race guest FIFO writes.
+        execution = (
+            "CPUThread = True\nSyncGPU = True\nSyncGpuMaxDistance = 1000000\n"
+            if sys.platform == "win32"
+            else "CPUThread = False\n"
+        )
         (config / "Dolphin.ini").write_text(
-            "[Display]\nFullscreen = False\nRenderWindowWidth = 960\nRenderWindowHeight = 720\n[Interface]\nConfirmStop = False\n[Core]\nCPUThread = False\nFastDiscSpeed = True\n[Input]\nBackgroundInput = True\n"
+            "[Display]\nFullscreen = False\nRenderWindowWidth = 960\nRenderWindowHeight = 720\n"
+            "[Interface]\nConfirmStop = False\n[Core]\n" + execution +
+            "FastDiscSpeed = True\n[Input]\nBackgroundInput = True\n"
         )
 
     def launch(self, plan):
@@ -332,6 +349,10 @@ class NativeService:
                 "OPENSMASH_MATCH": "1",
                 "OPENSMASH_NATIVE_MODULE": str(module),
             }
+            self.stop_file = None
+            if self.manifest.get("gracefulShutdown") == "file-v1":
+                self.stop_file = self.root / "build" / ("native-stop-" + uuid.uuid4().hex)
+                environment["OPENSMASH_STOP_FILE"] = str(self.stop_file)
             if sys.platform.startswith("linux") and os.environ.get("DISPLAY"):
                 environment.setdefault("SDL_VIDEODRIVER", "x11")
             for key, name in [

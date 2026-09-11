@@ -28,7 +28,9 @@ def build(inputs, out):
     # Immutable desktop inputs already contain the earlier native patches plus
     # platform fixes. Reversing that history would undo those platform fixes.
     apply_native_patches(runtime, [ROOT / "runtime/patches/native" / name for name in [
-        "keyboard-no-beep.patch", "zz-electron-embedded.patch"
+        "keyboard-no-beep.patch", "zz-electron-embedded.patch", "windows-sdk-compat.patch",
+        "zz-graceful-stop.patch",
+        "zz-performance.patch"
     ]])
     host = ROOT / "build/desktop-runtime-host"
     module = ROOT / "build/desktop-runtime-module"
@@ -151,7 +153,7 @@ def build(inputs, out):
             "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
         ]
     if os.name == "nt":
-        flags += ["-DCMAKE_CXX_FLAGS=-Wno-microsoft-include"]
+        flags += ["-DCMAKE_CXX_FLAGS=-Wno-microsoft-include " + os.environ.get("CXXFLAGS", "")]
     if sys.platform == "darwin":
         flags += [
             "-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0",
@@ -170,11 +172,15 @@ def build(inputs, out):
         "opensmash-launch",
         "opensmash-controllers",
         "opensmash-embedded-test",
+        "opensmash-mod-dispatch-test",
+        "opensmash-hash-test",
         "-j",
         jobs,
     )
     input_test = host / ("opensmash-embedded-test.exe" if os.name == "nt" else "opensmash-embedded-test")
     run(input_test, host / "embedded-input-test.bin")
+    run(host / ("opensmash-mod-dispatch-test.exe" if os.name == "nt" else "opensmash-mod-dispatch-test"))
+    run(host / ("opensmash-hash-test.exe" if os.name == "nt" else "opensmash-hash-test"), host / "hash-test-data.bin")
     run(
         "cmake",
         "-S",
@@ -266,6 +272,7 @@ def build(inputs, out):
         json.dumps(
             {
                 "protocol": 1,
+                "gracefulShutdown": "file-v1",
                 "platform": sys.platform,
                 "architecture": platform.machine(),
                 "embeddedSurfaces": ["rgba-memory-v1"] + (["iosurface-v1"] if sys.platform == "darwin" else []),
