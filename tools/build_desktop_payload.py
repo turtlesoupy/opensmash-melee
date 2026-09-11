@@ -32,7 +32,7 @@ def stage(freeze=True):
     hidden = set()
     for folder in ["opensmash_melee", "tools"]:
         for source in (ROOT / folder).glob("*.py"):
-            for node in ast.walk(ast.parse(source.read_text())):
+            for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):
                 names = (
                     [n.name for n in node.names]
                     if isinstance(node, ast.Import)

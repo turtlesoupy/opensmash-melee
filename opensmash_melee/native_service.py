@@ -9,7 +9,10 @@ class NativeService:
         self.root = Path(root)
         self.catalog = catalog
         self.setup = setup
-        self.runtime = Path(runtime)
+        # Match the executable's canonical directory spelling on Windows. The
+        # runner also searches its own Mods directory; different casing can
+        # otherwise make it load the same plugin twice and reject every mod.
+        self.runtime = Path(runtime).resolve()
         self.schema = json.loads(
             (self.root / "runtime/launch-options.json").read_text()
         )

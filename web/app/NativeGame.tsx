@@ -86,6 +86,7 @@ export default function NativeGame({
           );
         }
         if (closed) return;
+        setStatus("Starting Melee…");
         await request("/api/native/launch", { ...launch, session });
         const poll = async () => {
           try {
@@ -167,7 +168,7 @@ export default function NativeGame({
       {error && <p role="alert">{error}</p>}
       <p>
         {embedded
-          ? "Click the game to use the keyboard. F11 toggles fullscreen; Esc exits fullscreen."
+          ? "Click the game to use the keyboard. Press J to confirm first-run memory-card prompts. F11 toggles fullscreen; Esc exits fullscreen."
           : "The game uses a separate native window. Your launcher stays here."}
       </p>
       <details>

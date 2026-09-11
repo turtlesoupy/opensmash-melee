@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -115,6 +116,12 @@ class DesktopServiceTests(unittest.TestCase):
         (self.service.runtime / "engine").write_bytes(b"modified")
         with self.assertRaisesRegex(ValueError, "integrity"):
             NativeService(self.service.root, {}, None, self.service.runtime)
+
+    @unittest.skipUnless(os.name == "nt", "Windows paths are case insensitive")
+    def test_runtime_path_uses_canonical_casing(self):
+        runtime = Path(str(self.service.runtime).swapcase())
+        service = NativeService(self.service.root, {}, None, runtime)
+        self.assertEqual(str(service.runtime), str(self.service.runtime.resolve()))
 
 
 if __name__ == "__main__":

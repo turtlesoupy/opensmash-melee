@@ -1,2 +1,2 @@
 # Patch context includes intentional upstream whitespace.
-*.patch -whitespace
+*.patch text eol=lf -whitespace

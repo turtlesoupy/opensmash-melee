@@ -146,10 +146,11 @@ class GameSetup:
             if hashlib.sha256((staging/'sys/main.dol').read_bytes()).hexdigest() != DOL_SHA256:
                 raise ValueError('Extracted executable failed verification.')
             files = {}
-            for path in staging.rglob('*'):
-                if path.is_file():
-                    with path.open('rb') as stream:
-                        files[path.relative_to(staging).as_posix()] = hashlib.file_digest(stream, 'sha256').hexdigest()
+            extracted = [path for path in staging.rglob('*') if path.is_file()]
+            for index, path in enumerate(extracted):
+                self.progress('installing', f'Verifying extracted game files ({index + 1}/{len(extracted)})…', index / len(extracted))
+                with path.open('rb') as stream:
+                    files[path.relative_to(staging).as_posix()] = hashlib.file_digest(stream, 'sha256').hexdigest()
             # Keep the previous installation until extraction and verification succeed.
             backup = self.cache / ('previous-' + uuid.uuid4().hex)
             if self.game.exists():
