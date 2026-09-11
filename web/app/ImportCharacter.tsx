@@ -33,15 +33,15 @@ export default function ImportCharacter({onImported,onPlay}:{onImported:(f:Fight
    setJob(result);preferences.setItem(pendingKey,result.id);setId(result.id);
   }catch(e){setError((e as Error).message);}finally{setStarting(false);}
  }
- return <section className="launch-settings">
-  <p>Bring over a character you created in OpenSmash. Open its download panel, choose <strong>Copy Melee import URL</strong>, then paste it here.</p>
+ return <section className="launch-settings create-character">
+  <p>Create a character on smash.fun. In its download panel, choose <strong>Copy Melee import URL</strong>, then paste it here.</p>
   <form onSubmit={start}>
-   <label>Character URL<input aria-label="Character URL" type="url" required maxLength={4096} value={url} disabled={busy} onChange={e=>setUrl(e.target.value)} placeholder="https://smash.fun/engine/character-source/…/manifest.json" autoComplete="off" spellCheck={false}/></label>
+   <label>smash.fun import link<input aria-label="smash.fun import link" type="url" required maxLength={4096} value={url} disabled={busy} onChange={e=>setUrl(e.target.value)} placeholder="Paste your import link" autoComplete="off" spellCheck={false}/></label>
    <label>Melee moveset<select aria-label="Melee moveset" value={target} disabled={busy} onChange={e=>setTarget(e.target.value)}>{Object.entries(names).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
    <button className="retro-site-link" type="submit" disabled={busy||!url.trim()}>{busy?'Importing…':'Import character'}</button>
   </form>
-  <p>The first import downloads and retargets the mesh. It stays in your local roster for future matches. Your Melee ROM stays on your computer.</p>
-  {(starting||job)&&<p role="status" aria-live="polite">{starting?'Starting import…':job?.message}</p>}
+  <p>Your character will appear in your roster when it’s ready.</p>
+  {(starting||job)&&<p role="status" aria-live="polite">{starting?'Starting import…':job?.state==='complete'?'Character added to your roster.':job?.state==='failed'?'Import failed.':'Adding your character…'}</p>}
   {error&&<p role="alert">{error}</p>}
   {job?.state==='complete'&&job.fighter&&<button className="retro-site-link" onClick={()=>onPlay(job.fighter!)}>Play as {job.fighter.name}</button>}
  </section>;

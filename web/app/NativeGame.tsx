@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { desktop } from "@/lib/desktop";
-import { names, type Fighter } from "./page";
-import Controls from "./Controls";
-import { plan, schema, type Settings } from "@/lib/launch";
+import { type Fighter } from "./page";
+import { plan, type Settings } from "@/lib/launch";
 export default function NativeGame({
   fighter,
   settings,
@@ -19,6 +18,19 @@ export default function NativeGame({
   const embedded = desktop()?.embedded;
   const canvas = useRef<HTMLCanvasElement>(null);
   const [hasFrame, setHasFrame] = useState(false);
+  const [gameReady, setGameReady] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (hasFrame && gameReady) return;
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [hasFrame, gameReady]);
+  useEffect(() => {
+    if (embedded && hasFrame && gameReady && !document.querySelector('dialog[open]')) {
+      canvas.current?.focus({preventScroll: true});
+    }
+  }, [embedded, hasFrame, gameReady]);
   useEffect(() => {
     if (!embedded) return;
     const bridge = desktop()!;
@@ -26,6 +38,9 @@ export default function NativeGame({
     const frame = () => setHasFrame(true);
     const failed = (event: Event) => setError((event as CustomEvent<string>).detail);
     const clear = () => bridge.input(null, false);
+    const restoreFocus = () => {
+      if (!document.querySelector('dialog[open]')) element.focus({preventScroll: true});
+    };
     const key = (event: KeyboardEvent) => {
       if (event.code === "F11" || event.code === "Escape") return;
       if (event.type === "keydown" && (event.metaKey || event.ctrlKey || event.altKey)) return;
@@ -38,6 +53,7 @@ export default function NativeGame({
     element.addEventListener("keyup", key);
     element.addEventListener("blur", clear);
     window.addEventListener("blur", clear);
+    window.addEventListener("focus", restoreFocus);
     bridge.setGameActive(true);
     element.focus();
     return () => {
@@ -49,6 +65,7 @@ export default function NativeGame({
       element.removeEventListener("keyup", key);
       element.removeEventListener("blur", clear);
       window.removeEventListener("blur", clear);
+      window.removeEventListener("focus", restoreFocus);
     };
   }, [embedded]);
   useEffect(() => {
@@ -70,10 +87,10 @@ export default function NativeGame({
     async function start() {
       try {
         const launch = plan(settings, fighter, roster);
-        for (const c of launch.costumes) {
+        for (const [index, c] of launch.costumes.entries()) {
           if (closed) return;
           setStatus(
-            "Preparing " + (roster.find((f) => f.slug === c.character)?.name || c.character) + "…",
+            "Preparing " + (roster.find((f) => f.slug === c.character)?.name || c.character) + `… (${index + 1}/${launch.costumes.length})`,
           );
           await request(
             "/api/prepare/" +
@@ -86,22 +103,26 @@ export default function NativeGame({
           );
         }
         if (closed) return;
-        await request("/api/native/launch", { ...launch, session });
+        setStatus("Preparing your game…");
         const poll = async () => {
           try {
             const response = await fetch("/api/native/status", { signal: controller.signal });
             const s = await response.json();
             if (closed) return;
+            if (s.session !== session) { timer = setTimeout(poll, 500); return; }
             setStatus(s.message);
+            setGameReady(s.ready);
             if (s.exitCode && s.exitCode !== 0)
-              setError("Melee stopped unexpectedly. The local native-session.log has details.");
-            if (s.running) timer = setTimeout(poll, 500);
+              setError("The game stopped unexpectedly. Return to the roster to try again.");
+            timer = setTimeout(poll, 500);
           } catch (e) {
             if (!closed) setError((e as Error).message);
           }
         };
         void poll();
+        await request("/api/native/launch", { ...launch, session });
       } catch (e) {
+        clearTimeout(timer);
         if (!closed) setError((e as Error).message);
       }
     }
@@ -136,7 +157,7 @@ export default function NativeGame({
         </div>
       </header>
       {embedded && (
-        <div className="native-game-screen">
+        <div className="native-game-screen" onPointerDown={() => canvas.current?.focus({preventScroll: true})}>
           <canvas
             id="native-game-canvas"
             ref={canvas}
@@ -146,34 +167,16 @@ export default function NativeGame({
             aria-label={`Play as ${fighter.name}`}
             onClick={() => canvas.current?.focus()}
           />
-          {!hasFrame && !error && (
-            <p className="native-game-message" role="status">
-              {status}
-            </p>
+          {!(hasFrame && gameReady) && !error && (
+            <div className="native-game-message native-loading" role="status">
+              <progress aria-label="Loading game" />
+              <p>{status}</p>
+              <small>{elapsed}s elapsed{elapsed >= 15 ? " · The first load can take a little longer." : ""}</small>
+            </div>
           )}
         </div>
       )}
-      <p>
-        {schema.modes.find((m) => m.id === settings.mode)?.label} ·{" "}
-        {names[fighter.target] || fighter.target} moveset
-      </p>
-      {settings.mode !== 0 && (
-        <p>
-          This mode opens Melee’s menus. Custom characters use their host fighter’s original menu
-          slot and costume. Choose Free-for-All to play a match immediately.
-        </p>
-      )}
-      {(!embedded || hasFrame) && <p role="status">{status}</p>}
       {error && <p role="alert">{error}</p>}
-      <p>
-        {embedded
-          ? "Click the game to use the keyboard. F11 toggles fullscreen; Esc exits fullscreen."
-          : "The game uses a separate native window. Your launcher stays here."}
-      </p>
-      <details>
-        <summary>Keyboard & PS5 controls</summary>
-        <Controls />
-      </details>
     </section>
   );
 }

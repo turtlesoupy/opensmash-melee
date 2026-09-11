@@ -21,6 +21,7 @@ class NativeService:
         self.log = self.root / "build/native-session.log"
         self.user = self.root / "build/native-user"
         self.status_message = "Ready."
+        self.startup_step = 0
         if self.manifest.get("protocol") != 1:
             raise ValueError("Incompatible native runtime protocol")
         for key in ["runner", "module", "controllers"]:
@@ -45,6 +46,19 @@ class NativeService:
             "[opensmash] destination ready" in text
             or "[opensmash] combat started" in text
         )
+        milestones = [
+            ("mod loaded:", "Opening your game…"),
+            ("[staticrecomp] core init", "Loading game data…"),
+            ("[staticrecomp] module loaded:", "Loading fighters and stage…"),
+            ("[opensmash] launch mode=", "Preparing your match…"),
+            ("[opensmash] preparing first scene", "Getting the first scene ready…"),
+        ]
+        if running:
+            for step, (marker, _) in enumerate(milestones, 1):
+                if marker in text:
+                    self.startup_step = max(self.startup_step, step)
+        message = (milestones[self.startup_step - 1][1] if self.startup_step
+                   else "Opening your game…") if running else self.status_message
         return {
             "protocol": 1,
             "session": self.session,
@@ -52,9 +66,9 @@ class NativeService:
             "ready": running and ready,
             "exitCode": self.process.poll() if self.process else None,
             "message": (
-                ("Game is running." if os.environ.get("OPENSMASH_INPUT_FILE") else "Game is running in its native window.")
+                "Game is running."
                 if running and ready
-                else "Starting Melee…" if running else self.status_message
+                else message
             ),
         }
 
@@ -301,7 +315,12 @@ class NativeService:
             packed, costumes = self.validate(plan)
             if costumes and self.manifest.get("characterSelect") != 1:
                 raise ValueError("Update the desktop runtime to use character select injection.")
+            self.session = session
+            self.process = None
+            self.startup_step = 0
+            self.status_message = "Connecting your controllers…"
             self.controllers(plan["ports"])
+            self.status_message = "Preparing your game files…"
             game = self.root / "build/native-lineup"
             stage = game.with_name("native-lineup-" + uuid.uuid4().hex)
 
