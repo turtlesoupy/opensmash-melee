@@ -56,6 +56,8 @@ def build(inputs, out):
             )
         )
     if os.name == "nt":
+        bbox = runtime / "vendor/dolphin/Source/Core/VideoBackends/D3D/D3DBoundingBox.cpp"
+        bbox.write_text(bbox.read_text().replace("D3D11_BOX box{index * sizeof(BBoxType),", "D3D11_BOX box{static_cast<u32>(index * sizeof(BBoxType)),"))
         fzero = runtime / "vendor/dolphin/Source/Core/Core/HW/Triforce/FZeroAX.cpp"
         fzero.write_text("#include <functional>\n" + fzero.read_text())
         timing = runtime / "vendor/dolphin/Source/Core/VideoCommon/LightweightFrameTimingRecorder.cpp"
