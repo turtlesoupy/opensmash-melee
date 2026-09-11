@@ -56,6 +56,9 @@ def build(inputs, out):
             )
         )
     if os.name == "nt":
+        # clang-cl supports target attributes but does not define __GNUC__.
+        cull = runtime / "vendor/dolphin/Source/Core/VideoCommon/CPUCullImpl.h"
+        cull.write_text(cull.read_text().replace("defined(__GNUC__)", "(defined(__GNUC__) || defined(__clang__))"))
         # clang-cl uses the MSVC frontend, even though its compiler ID is Clang.
         implot = runtime / "vendor/dolphin/Externals/implot/CMakeLists.txt"
         implot.write_text(implot.read_text().replace("CXX_COMPILER_ID:MSVC", "BOOL:${MSVC}"))
