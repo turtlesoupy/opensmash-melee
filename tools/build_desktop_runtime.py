@@ -56,6 +56,18 @@ def build(inputs, out):
             )
         )
     if os.name == "nt":
+        timing = runtime / "vendor/dolphin/Source/Core/VideoCommon/LightweightFrameTimingRecorder.cpp"
+        timing_text = timing.read_text().replace('#include <ctime>', '#include <ctime>\n#include "Common/WindowsHeader.h"')
+        start = timing_text.index('  timespec time{};')
+        end = timing_text.index('\n}', start)
+        timing_text = timing_text[:start] + """  FILETIME created{}, exited{}, kernel{}, user{};
+  if (!GetThreadTimes(GetCurrentThread(), &created, &exited, &kernel, &user))
+    return 0;
+  const auto ticks = [](FILETIME t) {
+    return (static_cast<std::uint64_t>(t.dwHighDateTime) << 32) | t.dwLowDateTime;
+  };
+  return (ticks(kernel) + ticks(user)) * 100ULL;""" + timing_text[end:]
+        timing.write_text(timing_text)
         # clang-cl supports target attributes but does not define __GNUC__.
         cull = runtime / "vendor/dolphin/Source/Core/VideoCommon/CPUCullImpl.h"
         cull.write_text(cull.read_text().replace("defined(__GNUC__)", "(defined(__GNUC__) || defined(__clang__))"))
