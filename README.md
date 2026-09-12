@@ -12,10 +12,8 @@ Choose your platform, then download the matching archive from the release's **As
 | --- | --- | --- |
 | Windows (64-bit) | [Download for Windows](https://github.com/turtlesoupy/opensmash-melee/releases) | `OpenSmash-Melee-…-win-x64.zip` |
 | macOS (Apple Silicon) | [Download for Apple Silicon](https://github.com/turtlesoupy/opensmash-melee/releases) | `OpenSmash-Melee-…-mac-arm64.zip` |
-| macOS (Intel) | [Download for Intel Mac](https://github.com/turtlesoupy/opensmash-melee/releases) | `OpenSmash-Melee-…-mac-x64.zip` |
-| Linux (64-bit) | [Download for Linux](https://github.com/turtlesoupy/opensmash-melee/releases) | `OpenSmash-Melee-…-linux-x64.tar.gz` |
 
-Availability varies by release; check its notes for platform requirements and known issues.
+Check the release notes for platform requirements and known issues.
 
 ## Getting started
 
