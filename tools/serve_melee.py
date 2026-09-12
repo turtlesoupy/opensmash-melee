@@ -250,7 +250,7 @@ class Handler(BaseHTTPRequestHandler):
                     if not path.is_file():raise ValueError('Disc file is unavailable')
                     def receive_disc():
                         try:
-                            with path.open('rb') as stream:SETUP.receive(stream,path.stat().st_size)
+                            SETUP.receive_path(path)
                         except Exception as error:SETUP.progress('error',str(error))
                     threading.Thread(target=receive_disc,daemon=True).start()
                     return self.json({'accepted':True},202)

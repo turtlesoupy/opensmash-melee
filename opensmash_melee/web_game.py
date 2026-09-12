@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import threading
 import uuid
+import zipfile
 from .__main__ import atomic_write
 
 ISO_SIZE = 1459978240
@@ -81,9 +82,25 @@ class GameSetup:
         elif process is not None and process.poll() is None:
             process.kill()
 
-    def receive(self, stream, size):
+    def receive_path(self, path):
+        path = Path(path)
+        if path.suffix.lower() != '.zip':
+            with path.open('rb') as stream:
+                return self.receive(stream, path.stat().st_size)
+        with zipfile.ZipFile(path) as archive:
+            entries = [entry for entry in archive.infolist()
+                       if not entry.is_dir() and Path(entry.filename).suffix.lower() in ('.iso', '.gcm')]
+            if len(entries) != 1:
+                raise ValueError('Choose a ZIP containing exactly one Melee ISO or GCM.')
+            entry = entries[0]
+            if entry.flag_bits & 1:
+                raise ValueError('Password-protected ZIPs are not supported. Extract the ISO first.')
+            with archive.open(entry) as stream:
+                return self.receive(stream, entry.file_size, extracting=True)
+
+    def receive(self, stream, size, extracting=False):
         if size != ISO_SIZE:
-            raise ValueError('Choose a full, unmodified Melee USA 1.02 ISO or GCM (1,459,978,240 bytes). RVZ, ZIP and patched images are not supported.')
+            raise ValueError('Choose a full, unmodified Melee USA 1.02 ISO or GCM (1,459,978,240 bytes). RVZ, 7z and patched images are not supported.')
         if shutil.disk_usage(self.cache).free < size * 2:
             raise ValueError('Not enough free disk space. Free at least 3 GB for disc setup and try again.')
         if not self.lock.acquire(blocking=False):
@@ -107,7 +124,7 @@ class GameSetup:
                         output.write(chunk)
                         digest.update(chunk)
                         remaining -= len(chunk)
-                        self.progress('receiving', 'Copying and verifying your disc…', (size-remaining)/size)
+                        self.progress('receiving', 'Extracting ZIP and verifying your disc…' if extracting else 'Copying and verifying your disc…', (size-remaining)/size)
                     if digest.hexdigest() != ISO_SHA256:
                         raise ValueError('This disc does not match unmodified Melee USA 1.02. Choose the original ISO or GCM; your current setup has not been replaced.')
                 except Exception:

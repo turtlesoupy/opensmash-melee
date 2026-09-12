@@ -27,7 +27,7 @@ const fs=require('node:fs'),path=require('node:path');
  try{
   await page.goto(process.env.MELEE_TEST_URL||'http://127.0.0.1:5174/?benchmark=1');await page.bringToFront();
   if(process.env.MELEE_CHECK_INVALID){
-   const input=page.getByLabel('Choose Melee ISO or GCM');
+   const input=page.getByLabel('Choose Melee ISO, GCM or ZIP');
    await input.setInputFiles({name:'short.iso',mimeType:'application/octet-stream',buffer:Buffer.alloc(32)});
    await page.getByRole('alert').filter({hasText:'full, unmodified'}).waitFor();
    const invalid=path.join(output,'invalid.iso'),fd=fs.openSync(invalid,'w'),original=fs.openSync(iso,'r'),header=Buffer.alloc(0x440);
@@ -36,7 +36,7 @@ const fs=require('node:fs'),path=require('node:path');
    try{await input.setInputFiles(invalid);await page.getByRole('alert').filter({hasText:'known USA 1.02 Melee disc hash'}).waitFor({timeout:120000});}
    finally{fs.unlinkSync(invalid);}
   }
-  await page.getByLabel('Choose Melee ISO or GCM').setInputFiles(iso);
+  await page.getByLabel('Choose Melee ISO, GCM or ZIP').setInputFiles(iso);
   await page.waitForFunction(()=>document.querySelector('.boot-disc [role="status"]')?.textContent==='Ready to play.',null,{timeout:120000});
   if(process.env.MELEE_SETUP_ONLY){if(errors.length)throw Error(errors.join('\n'));console.log(process.env.MELEE_CHECK_INVALID?'Invalid disc rejection and valid local disc recovery passed.':'Local disc setup passed.');return;}
   const runStarted=events.length;

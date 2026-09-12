@@ -231,7 +231,7 @@ else
         const selected = await dialog.showOpenDialog(window, {
           title: "Choose Melee USA 1.02",
           properties: ["openFile"],
-          filters: [{ name: "GameCube disc", extensions: ["iso", "gcm"] }],
+          filters: [{ name: "GameCube disc", extensions: ["iso", "gcm", "zip"] }],
         });
         if (selected.canceled) return { cancelled: true };
         const response = await fetch(origin + "/api/native/disc", {

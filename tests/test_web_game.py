@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 from opensmash_melee.web_game import GameSetup, ISO_SHA256
 
@@ -57,3 +58,26 @@ class WebGameTests(unittest.TestCase):
             self.assertFalse(setup.lock.locked());self.assertFalse(iso.exists())
             self.assertEqual((setup.game/'keep').read_text(),'old game')
             self.assertEqual(setup.state['state'],'error')
+
+    def test_zip_rejects_missing_multiple_and_wrong_size_discs(self):
+        with tempfile.TemporaryDirectory() as d:
+            setup = GameSetup(d)
+            archive = Path(d) / 'disc.zip'
+            for names, message in [(['readme.txt'], 'exactly one'),
+                                   (['a.iso', 'b.gcm'], 'exactly one'),
+                                   (['nested/GAME.ISO'], 'full, unmodified')]:
+                with zipfile.ZipFile(archive, 'w') as z:
+                    for name in names: z.writestr(name, b'bad')
+                with self.assertRaisesRegex(ValueError, message): setup.receive_path(archive)
+                self.assertFalse(setup.lock.locked())
+                self.assertEqual(list(setup.cache.glob('*.iso')), [])
+
+    def test_zip_uses_existing_hash_validation_and_cleans_up(self):
+        with tempfile.TemporaryDirectory() as d, patch('opensmash_melee.web_game.ISO_SIZE', 4):
+            setup = GameSetup(d)
+            archive = Path(d) / 'disc.zip'
+            with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as z:
+                z.writestr('nested/GAME.ISO', b'nope')
+            with self.assertRaisesRegex(ValueError, 'unmodified'): setup.receive_path(archive)
+            self.assertFalse(setup.lock.locked())
+            self.assertEqual(list(setup.cache.glob('*.iso')), [])
