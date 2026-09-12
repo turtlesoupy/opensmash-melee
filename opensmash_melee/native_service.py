@@ -394,6 +394,12 @@ class NativeService:
             if self.manifest.get("gracefulShutdown") == "file-v1":
                 self.stop_file = self.root / "build" / ("native-stop-" + uuid.uuid4().hex)
                 environment["OPENSMASH_STOP_FILE"] = str(self.stop_file)
+            if sys.platform == "darwin":
+                # Apple Silicon static execution slows progressively during
+                # combat (about 15 FPS after a minute); the ARM64 JIT fallback
+                # holds 60 FPS with mod hooks retained. Users can still force
+                # OPENSMASH_CPU_BACKEND=static for comparison.
+                environment.setdefault("OPENSMASH_CPU_BACKEND", "jit")
             if sys.platform.startswith("linux") and os.environ.get("DISPLAY"):
                 environment.setdefault("SDL_VIDEODRIVER", "x11")
             for key, name in [

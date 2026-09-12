@@ -129,7 +129,10 @@ character/mode are not certified by those initial measurements.
 
 Windows offline matches now use the runtime's existing JIT engine while keeping
 native mod hooks and the portable module used by custom skinning. Other platforms
-keep their previous default. Netplay, lockstep validation, and runtimes without a
+keep their previous default at the engine level, but the macOS launcher now
+sets `OPENSMASH_CPU_BACKEND=jit` too: on Apple Silicon the static path slowed from
+17 ms to 60 ms per frame within 15 seconds of a four-player match, while the ARM64
+JIT held 59.9 FPS for 120 seconds (2026-09-11). Netplay, lockstep validation, and runtimes without a
 JIT retain static execution. Set `OPENSMASH_CPU_BACKEND=static` to compare the old
 execution path; the override does not change the netplay/lockstep guards.
 
