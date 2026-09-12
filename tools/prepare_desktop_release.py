@@ -38,6 +38,15 @@ def prepare(runtime, characters):
     roster.mkdir()
     with tarfile.open(characters) as archive:
         archive.extractall(roster, filter="data")
+    if __package__:
+        from .compact_desktop_glb import compact_roster
+        from .compact_desktop_portraits import compact_portraits
+    else:
+        from compact_desktop_glb import compact_roster
+        from compact_desktop_portraits import compact_portraits
+
+    print("Desktop model compaction:", json.dumps(compact_roster(roster)))
+    print("Desktop portrait compaction:", json.dumps(compact_portraits(roster)))
     # One catalog for UI and conversion service; missing sources never appear playable.
     print(
         "Prepared runtime protocol 1 and",

@@ -90,8 +90,8 @@ def main(args):
         bucket.blob(
             f'inputs/{CONFIG["characters"]}/characters.tar.gz'
         ).download_to_filename(characters)
-        run(sys.executable, "tools/prepare_desktop_release.py", runtime, characters)
         run(sys.executable, "-m", "pip", "install", "-r", "desktop/requirements.txt")
+        run(sys.executable, "tools/prepare_desktop_release.py", runtime, characters)
         npm = "npm.cmd" if os.name == "nt" else "npm"
         run(npm, "--prefix", "web", "ci")
         run(npm, "--prefix", "web", "run", "build")

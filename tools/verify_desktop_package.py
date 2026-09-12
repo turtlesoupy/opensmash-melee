@@ -22,6 +22,14 @@ def verify(resources):
         / ("melee-backend.exe" if os.name == "nt" else "melee-backend")
     )
     runtime = resources / "runtime"
+    # Exercise the bundled Pillow/WebP decoder, not the build machine's Python.
+    portraits = subprocess.run(
+        [str(exe), str(resources / "payload/tools/verify_desktop_portraits.py"),
+         str(resources / "characters")],
+        env={**os.environ, "OPENSMASH_WORKSPACE": str(resources / "payload")},
+        check=True, capture_output=True, text=True, timeout=60,
+    )
+    portrait_report = json.loads(portraits.stdout)
     manifest = json.loads((runtime / "runtime.json").read_text())
     suffix = (
         ".dll" if os.name == "nt" else ".dylib" if sys.platform == "darwin" else ".so"
@@ -118,6 +126,7 @@ def verify(resources):
                 return {
                     "protocol": 1,
                     "characters": len(catalog),
+                    "portraitAssets": portrait_report,
                     "isoRequired": True,
                     "invalidDiscRejected": True,
                     "sessionAuthentication": True,

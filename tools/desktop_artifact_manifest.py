@@ -11,7 +11,7 @@ if not artifacts:
 manifest = {
     "version": json.loads((root / "desktop/package.json").read_text())["version"],
     "sourceCommit": os.environ.get("GITHUB_SHA"),
-    "runtimeRelease": os.environ.get("OPENSMASH_RUNTIME_SOURCE", "desktop-runtime-v3"),
+    "runtimeRelease": os.environ.get("OPENSMASH_RUNTIME_SOURCE", "desktop-runtime-v4"),
     "characterRelease": "desktop-characters-v1",
     "files": {},
 }

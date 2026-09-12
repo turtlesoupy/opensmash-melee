@@ -4,6 +4,13 @@ import argparse, hashlib, io, json, tarfile
 from pathlib import Path
 from PIL import Image
 
+if __package__:
+    from .compact_desktop_glb import compact_glb
+    from .compact_desktop_portraits import encode_portrait
+else:
+    from compact_desktop_glb import compact_glb
+    from compact_desktop_portraits import encode_portrait
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -40,11 +47,17 @@ def package(source, output):
                         im.thumbnail(
                             (512, 512) if name == "portrait_raw.png" else (128, 128)
                         )
-                        out = io.BytesIO()
-                        im.save(out, "PNG", optimize=True)
-                        raw = out.getvalue()
+                        if name == "portrait_raw.png":
+                            raw = encode_portrait(im)
+                            name = "portrait_raw.webp"
+                        else:
+                            out = io.BytesIO()
+                            im.save(out, "PNG", optimize=True)
+                            raw = out.getvalue()
                 else:
                     raw = (folder / name).read_bytes()
+                    if name == "rigged.glb":
+                        raw = compact_glb(raw)
                 add(row["slug"] + "/" + name, raw)
             add(
                 row["slug"] + "/character.json",

@@ -15,6 +15,7 @@ from .skeleton import joints
 from .retarget import conform
 from .gx import replace_costume
 from .disc import validate_iso
+from .character_assets import portrait_path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOL_SHA1 = '08e0bf20134dfcb260699671004527b2d6bb1a45'
@@ -48,7 +49,7 @@ def import_character(source, out):
         raise ValueError('Import destination must be separate from its source')
     if out.exists():
         raise ValueError('Import destination already exists')
-    required = ['character.json','rigged.glb','portrait_raw.png','stock_raw.png','emblem_raw.png','announcer.wav']
+    required = ['character.json','rigged.glb',portrait_path(source).name,'stock_raw.png','emblem_raw.png','announcer.wav']
     for name in required:
         if not (source/name).is_file():
             raise ValueError(f'Missing generation artifact: {name}')

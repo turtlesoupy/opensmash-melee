@@ -15,6 +15,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 from .archive import Archive
 from .gx import rgba8
+from .character_assets import portrait_path
 
 MAGIC = 0x4F534353
 SYMBOL = 'OpenSmashCharacterSelect'
@@ -32,7 +33,8 @@ def image_descriptor(a, image):
 
 def portrait(source, size, label=True):
     info = json.loads((source / 'character.json').read_text())
-    art = Image.open(source / 'portrait_raw.png').convert('RGBA')
+    with Image.open(portrait_path(source)) as image:
+        art = image.convert('RGBA')
     canvas = Image.new('RGBA', size, (22, 27, 43, 255))
     label_height = 12 if label else 0
     art = (ImageOps.contain(art, (size[0], size[1] - label_height), Image.Resampling.LANCZOS) if label

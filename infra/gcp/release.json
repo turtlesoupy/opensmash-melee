@@ -3,7 +3,7 @@
   "region": "us-central1",
   "zone": "us-central1-a",
   "bucket": "fun-opensmash-builds-artifacts",
-  "runtime": "desktop-runtime-v3",
+  "runtime": "desktop-runtime-v4",
   "characters": "desktop-characters-v1",
   "inputs": "desktop-inputs-v3",
   "workerServiceAccount": "release-worker@fun-opensmash-builds.iam.gserviceaccount.com",

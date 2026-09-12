@@ -71,6 +71,59 @@ Release tags now use the fun.inc GCP project for Windows and Linux. See
 cleanup limits, and the separate macOS packaging requirement. Ordinary pushes no
 longer trigger the GitHub app matrix.
 
+## Character payload size
+
+`prepare_desktop_release.py` compacts the staged roster after extracting the
+versioned cache, so existing `desktop-characters-v1` inputs benefit without
+republishing them. `package_desktop_characters.py` applies the same transform
+when creating future caches. Both transforms are idempotent and print model and
+portrait byte totals during preparation. Install `desktop/requirements.txt`
+before preparation; the GitHub and GCP build paths do this automatically.
+
+`tools/compact_desktop_portraits.py` replaces staged `portrait_raw.png` files
+with `portrait_raw.webp` at quality 90, method 4—the settings used in the reviewed
+comparison. Dimensions and alpha are preserved; RGB compression is lossy. Already
+compressed portraits are not encoded again. Original PNG sources and cache
+archives remain unchanged. Local character import and menu rendering accept
+either format; source-link downloads retain their existing PNG contract.
+
+`tools/compact_desktop_glb.py` removes normal, metallic/roughness, occlusion and
+emissive texture maps that `opensmash_melee/glb.py` does not consume. It preserves
+base-color image bytes, every geometry/skin accessor, shared resources and all
+characters. It does not resize or recompress visible art. Models containing
+unknown extensions are left untouched. Original source exports and downloaded
+cache archives are never modified. Revisit this transform if the converter
+starts consuming additional material maps.
+
+Run `python -m unittest tests.test_desktop_compaction tests.test_desktop_portraits`
+for resource-sharing, alpha/dimension preservation, idempotence, import/rendering
+and cached-release integration checks. `verify_desktop_package.py` also decodes
+every catalog portrait through the frozen backend, so a missing bundled WebP
+decoder fails package verification.
+
+Local measurement against the 0.2.0 macOS arm64 archive: all 1,063 characters
+produced identical decoded mesh arrays and base-color pixels before and after
+compaction. Model data fell from 626,696,660 to 361,923,588 bytes. Repacking the
+archive reduced it from 1,060,826,969 to 855,709,993 bytes (19.3%); only 64,519
+bytes of that saving came from recompressing other entries. This was a size
+measurement, not a newly signed release or a gameplay validation.
+
+Additional compression experiments on that compacted macOS payload:
+
+| Encoding | Download bytes | Notes |
+| --- | ---: | --- |
+| ZIP after model compaction only | 855,709,993 | Before portrait compaction |
+| Maximum macOS ZIP (`zip -9 -r -y`) | 855,720,751 | Same entry sizes and CRCs; no meaningful saving |
+| tar + XZ (`xz -6 -T4`) | 770,834,132 | Lossless; different distribution format |
+| tar + Zstandard (`zstd -19 -T4`) | 795,441,510 | Lossless; different distribution format |
+| ZIP with quality-90 WebP portraits | approximately 588,020,609 | Projected from encoding and DEFLATE-compressing all 1,063 portraits; now integrated into packaging |
+
+The portrait experiment preserves dimensions and alpha, but changes RGB pixels.
+Portrait files alone fell from 285,806,226 to 18,197,574 bytes before outer
+compression. The archive formats remain ZIP on macOS/Windows and tar.gz on Linux.
+General archive compression and image compression solve
+different problems; PNG/JPEG art leaves limited redundancy for outer compressors.
+
 ## Disc and release checks
 
 No ISO or extracted game filesystem is bundled. On first launch, select a full
