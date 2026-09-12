@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 from argparse import Namespace
-from infra.gcp.coordinator import validate_release, run
+from infra.gcp.coordinator import CONFIG, validate_release, run, stage, cloud_enabled
 
 
 class ReleasePolicyTests(unittest.TestCase):
@@ -19,6 +19,7 @@ class ReleasePolicyTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_release(tag, commit, "1.2.3")
 
+    @patch.dict(CONFIG, {"buildMode": "cloud"})
     @patch("infra.gcp.coordinator.subprocess.run")
     @patch("infra.gcp.coordinator.cloud", side_effect=RuntimeError("create failed"))
     def test_provisioning_failure_still_attempts_cleanup(self, cloud, command):
@@ -32,3 +33,16 @@ class ReleasePolicyTests(unittest.TestCase):
         self.assertIn("--instance-termination-action=DELETE", args)
         self.assertIn("--max-run-duration=7200s", args)
         self.assertIn("--boot-disk-auto-delete", args)
+
+    @patch.dict(CONFIG, {"buildMode": "local"})
+    @patch("infra.gcp.coordinator.cloud")
+    def test_local_release_never_stages_or_provisions(self, cloud):
+        with patch("infra.gcp.coordinator.validate_release"):
+            stage(Namespace(tag="v1.2.3", commit="a" * 40, build="local-test"))
+        run(Namespace(build="local-test", platform="windows-x64"))
+        cloud.assert_not_called()
+
+    @patch.dict(CONFIG, {"buildMode": "invalid"})
+    def test_unknown_build_mode_is_rejected(self):
+        with self.assertRaises(ValueError):
+            cloud_enabled()

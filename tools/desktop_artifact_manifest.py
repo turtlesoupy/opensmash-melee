@@ -5,13 +5,14 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 out = root / "build/desktop-artifacts"
-artifacts = sorted([*out.glob("*.zip"), *out.glob("*.tar.gz")])
+version = json.loads((root / "desktop/package.json").read_text())["version"]
+artifacts = sorted([*out.glob(f"OpenSmash-Melee-{version}-*.zip"), *out.glob(f"OpenSmash-Melee-{version}-*.tar.gz")])
 if not artifacts:
     raise SystemExit("No desktop archives were built")
 manifest = {
-    "version": json.loads((root / "desktop/package.json").read_text())["version"],
+    "version": version,
     "sourceCommit": os.environ.get("GITHUB_SHA"),
-    "runtimeRelease": os.environ.get("OPENSMASH_RUNTIME_SOURCE", "desktop-runtime-v4"),
+    "runtimeRelease": os.environ.get("OPENSMASH_RUNTIME_SOURCE", json.loads((root / "infra/gcp/release.json").read_text())["runtime"]),
     "characterRelease": "desktop-characters-v1",
     "files": {},
 }

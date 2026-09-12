@@ -42,6 +42,9 @@ def stage(args):
         args.commit,
         json.loads((ROOT / "desktop/package.json").read_text())["version"],
     )
+    if not cloud_enabled():
+        print("Local release selected; skipping cloud source staging.", flush=True)
+        return
     source = Path("/tmp/opensmash-release-source.tar.gz")
 
     def include(info):
@@ -70,7 +73,17 @@ def stage(args):
     )
 
 
+def cloud_enabled():
+    mode = CONFIG.get("buildMode", "cloud")
+    if mode not in {"local", "cloud"}:
+        raise ValueError("buildMode must be local or cloud")
+    return mode == "cloud"
+
+
 def run(args):
+    if not getattr(args, "smoke", False) and not cloud_enabled():
+        print("Local release selected; skipping cloud builder.", flush=True)
+        return
     if not re.fullmatch(r"[a-z0-9-]{1,64}", args.build):
         raise ValueError("Invalid build ID")
     platform = args.platform

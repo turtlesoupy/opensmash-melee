@@ -1,20 +1,57 @@
-# OpenSmash release builds on Google Cloud
+# OpenSmash desktop releases
 
 Project: `fun-opensmash-builds`, under the `fun.inc` organization.
 Region: `us-central1`. Private bucket: `gs://fun-opensmash-builds-artifacts`.
 
 Cloud Build's `desktop-release` trigger listens to **version tags only**:
 `v0.2.1` or `v0.2.1-rc.1`. The tag must match `desktop/package.json` exactly.
+The tagged `release.json` selects `buildMode`: `local` skips cloud staging and VM
+provisioning; `cloud` runs the configured cloud builders. A local tag still starts
+a short Cloud Build coordinator job, but no builder VMs.
 Regular pushes and PRs do not launch the release builders. The old GitHub desktop
 packaging workflow is manual-only. No always-running CI machine is installed on
 this Mac or on tj64-forge.
 
-## Release flow
+## Local builds
+
+Set `buildMode` to `local` in `infra/gcp/release.json`, update the desktop version
+with `npm --prefix desktop version VERSION --no-git-tag-version`, and commit.
+On each builder, fetch and check out that exact commit before packaging. Keep the
+checkout unchanged while a build is running. Each machine builds its native
+architecture; Apple Silicon builds macOS arm64, and the Windows desktop builds
+Windows x64. Linux can be omitted.
+
+With Python dependencies from `desktop/requirements.txt`, Node/npm, CMake and
+Ninja installed, run from the repository root:
+
+```sh
+python tools/release_desktop.py
+```
+
+Use the project's packaging Python environment if available (on the Mac,
+`build/desktop-python/bin/python`). Windows also needs the activated MSVC x64
+developer environment and `CC=clang-cl`, `CXX=clang-cl`.
+The default private inputs are `build/desktop-inputs/native-inputs-v3.tar.gz`
+and `build/desktop-inputs/characters.tar.gz`; override with `--inputs` and
+`--characters`. The command rebuilds the runtime incrementally, packages the app,
+runs tests and the packaged ISO-gate check, and records the source commit and
+checksums in `build/desktop-artifacts`. It neither tags nor uploads a release.
+
+After all requested platforms pass, create and push the matching version tag on
+that commit and collect each builder's archives, manifest and checksums for the
+GitHub release. Version tags for local builds do not launch cloud VMs.
+
+## Cloud builds
+
+Set `buildMode` to `cloud` before committing and tagging to use the cloud path.
+The current `cloudbuild.yaml` runs Windows; add a Linux worker step when needed.
+
+## Cloud release flow
 
 1. Develop and validate the launcher locally with `python tools/dev_desktop.py`.
 2. Update the desktop version, commit, then push that commit and its version tag.
-3. Cloud Build stages the exact tagged source and starts temporary Linux and
-   Windows VMs. They reuse the private engine and character payloads. Missing
+3. Cloud Build stages the exact tagged source and starts the configured temporary
+   builder VMs. They reuse the private engine and character payloads. Missing
    engine payloads are compiled once and saved for later releases.
 4. Each platform runs service tests and the packaged ISO-gate smoke check before
    uploading archives, checksums and source metadata under
@@ -25,8 +62,8 @@ this Mac or on tj64-forge.
 
 **macOS still needs Apple hardware.** Both Mac engine payloads are stored in the
 bucket, but GCP does not replace the Mac application-packaging step. Use the local
-Mac packaging scripts or the manual GitHub fallback on a Mac runner. This GCP
-trigger automates Linux and Windows; it does not claim four-platform packaging.
+Mac packaging scripts or the manual GitHub fallback on a Mac runner. The current GCP
+trigger packages Windows; Linux worker support is available separately.
 
 `release.json` is the central configuration for the project, bucket, VM size,
 maximum duration and versioned inputs. Bump the runtime tag for native changes;
