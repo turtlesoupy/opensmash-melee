@@ -98,7 +98,9 @@
       "createStartMenuShortcut": true,
       "runAfterFinish": false,
       "deleteAppDataOnUninstall": false,
-      "packElevateHelper": false
+      "packElevateHelper": false,
+      "differentialPackage": false,
+      "useZip": true
     }
   }
 }

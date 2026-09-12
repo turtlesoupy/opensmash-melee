@@ -148,3 +148,10 @@ shortcut/registry cleanup. Record duration, file count, bytes and SHA256. State
 the extraction tool and disk/cache conditions for ZIP comparisons; a command-line
 benchmark does not establish Explorer speed. Upload private candidates under
 `installer-candidates/COMMIT/windows-x64/`, separate from published releases.
+
+The offline NSIS installer uses a ZIP payload (`useZip: true`,
+`differentialPackage: false`). The first Windows trial installed this payload in
+33.7 seconds versus roughly 2.5 minutes for the default 7z payload; these are
+single-machine warm-cache trials, not Explorer benchmarks. ZIP trades a larger
+download for faster extraction. There is no automatic updater or differential
+update feed; upgrades use the full installer. Revisit this setting if adding one.
