@@ -41,7 +41,7 @@ async function startBackend() {
     const timeout = setTimeout(() => {
       child.kill();
       reject(Error("The local game service did not start. Check desktop-backend.log."));
-    }, 30000);
+    }, 60000);
     child.once("error", (e) => {
       clearTimeout(timeout);
       reject(e);

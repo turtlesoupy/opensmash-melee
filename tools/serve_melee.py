@@ -389,6 +389,13 @@ if __name__ == '__main__':
     parser.add_argument('--import-origin', action='append', default=[], help='Additional exact source-export origin for local development')
     parser.add_argument('--trace-io', action='store_true', help='Record local asset request timings for startup profiling')
     args = parser.parse_args()
+    startup_started = time.monotonic()
+    def startup_log(message):
+        if args.desktop:
+            print(f'[startup {time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())} '
+                  f'+{time.monotonic() - startup_started:.3f}s] {message}',
+                  file=sys.stderr, flush=True)
+    startup_log('Initializing game setup')
     TRACE_IO = args.trace_io
     CHARACTERS = args.characters.expanduser().resolve()
     from opensmash_melee.web_game import GameSetup
@@ -400,14 +407,19 @@ if __name__ == '__main__':
     if not args.desktop:
         from pack_browser_sys import pack
         pack(SYS, BUILD / 'sys-bundle.bin')
-    print(f'Local game setup and asset server: http://127.0.0.1:{args.port}', flush=True)
+    startup_log('Loading character import service')
     from opensmash_melee.character_import import ImportManager
     IMPORTS=ImportManager(CATALOG,LOCK,['https://smash.fun','https://www.smash.fun',*args.import_origin])
+    startup_log('Character import service ready')
     if args.desktop:
         if not TOKEN:raise SystemExit('Desktop service requires its session token')
+        startup_log('Loading native service')
         from opensmash_melee.native_service import NativeService
-        NATIVE=NativeService(ROOT,CATALOG,SETUP,os.environ['OPENSMASH_RUNTIME'])
+        NATIVE=NativeService(ROOT,CATALOG,SETUP,os.environ['OPENSMASH_RUNTIME'],startup_log=startup_log)
+    startup_log('Binding localhost HTTP server')
     server=ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
+    startup_log(f'Localhost HTTP server ready on port {server.server_port}')
+    print(f'Local game setup and asset server: http://127.0.0.1:{server.server_port}', flush=True)
     if args.desktop:print(json.dumps({'port':server.server_port,'protocol':1}),flush=True)
     try:server.serve_forever()
     finally:

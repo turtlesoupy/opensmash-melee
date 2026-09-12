@@ -5,7 +5,9 @@ from pathlib import Path
 
 
 class NativeService:
-    def __init__(self, root, catalog, setup, runtime):
+    def __init__(self, root, catalog, setup, runtime, startup_log=None):
+        report = startup_log or (lambda message: None)
+        report("Reading native runtime configuration")
         self.root = Path(root)
         self.catalog = catalog
         self.setup = setup
@@ -32,12 +34,15 @@ class NativeService:
             if self.manifest.get(key) not in self.manifest.get("sha256", {}):
                 raise ValueError("Incomplete runtime manifest")
         for name, digest in self.manifest["sha256"].items():
+            report(f"Verifying runtime file: {name}")
             path = (self.runtime / name).resolve()
             if not path.is_relative_to(self.runtime.resolve()):
                 raise ValueError("Invalid runtime manifest path")
             with path.open("rb") as stream:
                 if hashlib.file_digest(stream, "sha256").hexdigest() != digest:
                     raise ValueError("Runtime integrity check failed: " + name)
+            report(f"Verified runtime file: {name}")
+        report("Native runtime verification complete")
 
     def status(self):
         running = self.process is not None and self.process.poll() is None
