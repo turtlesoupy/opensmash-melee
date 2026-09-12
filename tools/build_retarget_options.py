@@ -18,8 +18,8 @@ def build(slugs=None):
         if slugs and row['slug'] not in slugs: continue
         if not (ROOT / 'build/characters' / base / 'profile.json').exists(): continue
         for target in TARGETS:
-            if target == row['target']: continue
-            ident = cache_id(row['slug'],target,row['target'])
+            if target == row.get('original_target', row['target']): continue
+            ident = cache_id(row['slug'],target,row.get('original_target', row['target']))
             folder = ROOT / 'build/characters' / ident
             filename = TARGETS[target]['costumes'][0]['filename']
             if not (folder / filename).exists():

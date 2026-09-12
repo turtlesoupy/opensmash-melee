@@ -78,3 +78,14 @@ test('Zelda and Sheik reserve colors together and prepare both transformations',
   for(const c of pair)assert.equal(c.fighter,schema.targets.find(t=>t.slug===c.target).fighter);
  }
 });
+test('expanded catalog launches every grid default with random opponents',()=>{
+ const catalog=JSON.parse(readFileSync(new URL('../web/public/catalog.json',import.meta.url)));
+ assert.equal(new Set(catalog.map(f=>f.target)).size,26);
+ for(const selected of catalog) {
+  for(const random of [()=>0,()=>0.12,()=>0.5,()=>0.999]) {
+   const p=planLaunch(schema,fresh(),selected,catalog,random);
+   assert.equal(p.ports[0].target,selected.target);
+   assert.equal(p.costumes[0].target,selected.target);
+  }
+ }
+});

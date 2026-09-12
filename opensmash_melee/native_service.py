@@ -186,7 +186,7 @@ class NativeService:
                 or c.get("filename") != slots[color]["filename"]
             ):
                 raise ValueError("Invalid costume slot")
-            ident = cache_id(row["slug"],target,row["target"])
+            ident = cache_id(row["slug"],target,row.get("original_target", row["target"]))
             source = (
                 self.root
                 / "build/characters"

@@ -19,3 +19,15 @@ class RosterRegistry(unittest.TestCase):
   ids=[cache_id('abrahamlincoln',target,'mario') for target in BY_SLUG]
   self.assertEqual(len(set(ids)),27)
   with self.assertRaises(ValueError):cache_id('x','../bad','mario')
+ def test_catalog_defaults_cover_expanded_roster_and_preserve_cache_identity(self):
+  from tools.assign_roster_targets import assign
+  rows=json.loads((ROOT/'web/public/catalog.json').read_text())
+  self.assertEqual({r['target'] for r in rows},set(PLAYABLE))
+  self.assertEqual(assign(rows),rows)
+  self.assertEqual(assign(list(reversed(rows))),list(reversed(rows)))
+  for row in rows:
+   original=row['original_target']
+   ids=[cache_id(row['slug'],target,original) for target in BY_SLUG]
+   self.assertEqual(len(set(ids)),len(BY_SLUG))
+   if row['target']!=original:
+    self.assertNotEqual(cache_id(row['slug'],row['target'],original),cache_id(row['slug'],original,original))

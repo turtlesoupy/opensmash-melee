@@ -184,7 +184,7 @@ class Handler(BaseHTTPRequestHandler):
                 target = query.get('target',[CATALOG[slug]['target']])[0]
                 if target not in BY_SLUG: raise ValueError('Unknown moveset')
                 fighter, code = KINDS[target]
-                ident = cache_id(slug,target,CATALOG[slug]['target'])
+                ident = cache_id(slug,target,CATALOG[slug].get('original_target', CATALOG[slug]['target']))
                 variant = ('browser-compact/' if query.get('compact') == ['1'] else 'browser/') if query.get('skin') == ['host'] else ''
                 color = int(query.get('color', ['0'])[0])
                 slots = BY_SLUG[target]['costumes']
@@ -324,7 +324,7 @@ class Handler(BaseHTTPRequestHandler):
         fighter, code = KINDS[target]
         slots = BY_SLUG[target]['costumes']
         if not 0 <= color < len(slots): return self.send_error(400)
-        ident = cache_id(slug,target,row['target'])
+        ident = cache_id(slug,target,row.get('original_target', row['target']))
         output = ROOT / 'build/characters' / ident
         with preparation_lock(ident), PREPARATION_SLOTS:
             if not (output / f'Pl{code}Nr.dat').is_file():

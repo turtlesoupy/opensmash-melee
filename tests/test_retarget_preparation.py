@@ -13,7 +13,7 @@ class RetargetPreparation(unittest.TestCase):
   with tempfile.TemporaryDirectory() as directory:
    root=Path(directory);slug='fixture';ident=cache_id(slug,'kirby','fox')
    path=root/'build/characters'/ident/'browser/PlKbNr.dat';path.parent.mkdir(parents=True);path.write_bytes(b'kirby-fixture')
-   catalog={slug:{'slug':slug,'target':'fox'}}
+   catalog={slug:{'slug':slug,'target':'kirby','original_target':'fox'}}
    with patch.multiple(server,ROOT=root,CATALOG=catalog,TOKEN='',SETUP=SimpleNamespace(ready=True)):
     http=ThreadingHTTPServer(('127.0.0.1',0),server.Handler)
     thread=threading.Thread(target=http.serve_forever,daemon=True);thread.start()

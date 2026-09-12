@@ -286,6 +286,6 @@ def catalog_identities(root, catalog, costumes):
         if type(color) is not int or not 0 <= color < len(slots) or c.get('filename') != slots[color]['filename'] or (fighter, color) in seen:
             raise ValueError('Invalid injected costume slot')
         seen.add((fighter, color))
-        ident = cache_id(row['slug'],c.get('target',row['target']),row['target'])
+        ident = cache_id(row['slug'],c.get('target',row['target']),row.get('original_target', row['target']))
         entries.append((fighter, color, Path(root) / 'assets/characters' / ident))
     return entries

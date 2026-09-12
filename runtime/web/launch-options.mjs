@@ -9,10 +9,20 @@ export function planLaunch(schema, settings, selected, roster, random = Math.ran
   const devices = new Set(), used = new Map(), costumes = [], taken = new Set([selected.slug]);
   const pick = list => list[Math.min(list.length-1, Math.floor(random()*list.length))];
   // A random custom opponent never repeats the player's fighter or another random pick.
-  const randomCustom = () => {
-    const pool = roster.filter(f => kinds[f.target] !== undefined && !taken.has(f.slug));
-    const row = pool.length ? pick(pool) : roster.find(f => kinds[f.target] !== undefined);
-    if (!row) return 'vanilla:' + pick(schema.fighters).id;
+  // Game & Watch shares one DAT: random lineups must avoid incompatible occupants.
+  const gameWatchOccupants = new Set(settings.ports.filter(p => p.device !== 'off').flatMap(p => {
+    const character = p.character === 'selected' ? selected.slug : p.character;
+    const row = roster.find(f => f.slug === character);
+    const target = p.target && p.target !== 'auto' ? p.target : row?.target;
+    return !character.startsWith('random') && (character === 'vanilla:3' || kinds[target] === 3) ? [character] : [];
+  }));
+  const randomCustom = (override) => {
+    const compatible = roster.filter(f => kinds[f.target] !== undefined &&
+      (kinds[override && override !== 'auto' ? override : f.target] !== 3 || !gameWatchOccupants.size ||
+       (gameWatchOccupants.size === 1 && gameWatchOccupants.has(f.slug))));
+    const pool = compatible.filter(f => !taken.has(f.slug));
+    const row = pool.length ? pick(pool) : compatible[0];
+    if (!row) return 'vanilla:' + pick(schema.fighters.filter(f => f.id !== 3 || !gameWatchOccupants.size)).id;
     taken.add(row.slug);return row.slug;
   };
   const ports = settings.ports.map(p => {
@@ -23,11 +33,12 @@ export function planLaunch(schema, settings, selected, roster, random = Math.ran
     }
     const character = p.character === 'selected' ? selected.slug
       : p.device === 'off' ? (p.character.startsWith('random') ? 'vanilla:2' : p.character)
-      : p.character === 'random:vanilla' ? 'vanilla:' + pick(schema.fighters).id
-      : p.character === 'random' ? randomCustom() : p.character;
+      : p.character === 'random:vanilla' ? 'vanilla:' + pick(schema.fighters.filter(f => f.id !== 3 || !gameWatchOccupants.size)).id
+      : p.character === 'random' ? randomCustom(p.target) : p.character;
     const row = roster.find(f => f.slug === character);
     const target = p.target && p.target !== 'auto' ? p.target : row?.target;
     const fighter = character.startsWith('vanilla:') ? Number(character.slice(8)) : kinds[target];
+    if (fighter === 3 && p.device !== 'off') gameWatchOccupants.add(character);
     if (!integer(fighter, 0, 25)) throw Error('Choose a valid fighter for every player.');
     return {device:p.device, character, target, fighter, color:0, custom:!!row && p.device !== 'off'};
   });
