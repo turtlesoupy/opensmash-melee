@@ -58,7 +58,6 @@ export default function NativeGame({
     element.focus();
     return () => {
       bridge.setGameActive(false);
-      void bridge.fullscreen(false);
       element.removeEventListener("native-frame", frame);
       element.removeEventListener("native-error", failed);
       element.removeEventListener("keydown", key);
@@ -175,7 +174,7 @@ export default function NativeGame({
               Fullscreen · F11
             </button>
           )}
-          <button onClick={onClose}>Return to roster</button>
+          <button onClick={() => { void desktop()?.fullscreen(false); onClose(); }}>Return to roster</button>
         </div>
       </header>
       {embedded && (

@@ -101,6 +101,7 @@ else
         title: "OpenSmash Melee",
         backgroundColor: "#0c0905",
         show: false,
+        autoHideMenuBar: process.platform !== "darwin",
         webPreferences: {
           preload: path.join(__dirname, "preload.cjs"),
           contextIsolation: true,
@@ -109,6 +110,7 @@ else
         },
       });
       saveWindowState = placement.track(window);
+      const setFullscreen = require("./fullscreen.cjs")(window);
       const settingsItem = {
         label: "Settings…", accelerator: "CmdOrCtrl+,",
         click: () => window.webContents.send("melee:open-settings"),
@@ -118,8 +120,15 @@ else
           { role: "about" }, { type: "separator" }, settingsItem,
           { type: "separator" }, { role: "services" }, { role: "hide" }, { role: "quit" },
         ] }] : [{ label: "File", submenu: [settingsItem, { type: "separator" }, { role: "quit" }] }]),
-        { role: "editMenu" }, { role: "viewMenu" }, { role: "windowMenu" },
+        { role: "editMenu" }, { label: "View", submenu: [
+          { role: "reload" }, { role: "forceReload" }, { role: "toggleDevTools" },
+          { type: "separator" }, { role: "resetZoom" }, { role: "zoomIn" }, { role: "zoomOut" },
+          { type: "separator" },
+          { label: "Toggle Fullscreen", accelerator: process.platform === "darwin" ? "Ctrl+Command+F" : "F11",
+            click: () => setFullscreen() },
+        ] }, { role: "windowMenu" },
       ]));
+      if (process.platform !== "darwin") window.setMenuBarVisibility(false);
       surface?.attach(window);
       const lifecycle = require("./game-lifecycle.cjs")(async (route, body) => {
         const response = await fetch(origin + route, {
@@ -141,14 +150,6 @@ else
         if (mainFrame && !inPlace) resetGame();
       });
       window.webContents.on("render-process-gone", resetGame);
-      const syncFullscreen = () => {
-        const fullscreen = window.isFullScreen();
-        if (process.platform !== "darwin") window.setMenuBarVisibility(!fullscreen);
-        window.webContents.send("melee:fullscreen-state", fullscreen);
-      };
-      for (const event of ["enter-full-screen", "leave-full-screen"])
-        window.on(event, syncFullscreen);
-      window.webContents.on("did-finish-load", syncFullscreen);
       window.webContents.setWindowOpenHandler(({ url }) => {
         try {
           const u = new URL(url);
@@ -188,16 +189,16 @@ else
       });
       ipcMain.handle("melee:fullscreen", (event, value) => {
         validateCaller(event);
-        window.setFullScreen(typeof value === "boolean" ? value : !window.isFullScreen());
+        setFullscreen(value);
       });
       window.webContents.on("before-input-event", (event, input) => {
         if (
           input.type === "keyDown" &&
           !input.isAutoRepeat &&
-          (input.key === "F11" || (input.key === "Escape" && window.isFullScreen()))
+          input.key === "Escape" && window.isFullScreen()
         ) {
           event.preventDefault();
-          window.setFullScreen(input.key === "F11" ? !window.isFullScreen() : false);
+          setFullscreen(false);
         }
       });
       let preferences = {};

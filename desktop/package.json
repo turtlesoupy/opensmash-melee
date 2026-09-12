@@ -34,6 +34,7 @@
       "frame.cjs",
       "game-lifecycle.cjs",
       "window-state.cjs",
+      "fullscreen.cjs",
       "native/build/Release/surface.node"
     ],
     "extraResources": [
