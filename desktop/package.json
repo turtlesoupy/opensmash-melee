@@ -91,16 +91,18 @@
     ],
     "nsis": {
       "artifactName": "OpenSmash-Melee-${version}-win-${arch}-Setup.${ext}",
-      "oneClick": true,
+      "oneClick": false,
       "perMachine": false,
       "allowElevation": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "runAfterFinish": false,
+      "runAfterFinish": true,
       "deleteAppDataOnUninstall": false,
       "packElevateHelper": false,
       "differentialPackage": false,
-      "useZip": true
+      "useZip": true,
+      "allowToChangeInstallationDirectory": true,
+      "include": "installer/windows.nsh"
     },
     "dmg": {
       "title": "OpenSmash Melee ${version}",

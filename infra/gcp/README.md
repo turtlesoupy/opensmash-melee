@@ -134,8 +134,9 @@ Use `--artifacts build/installer-candidate --commit FULL_SHA` for an isolated
 local candidate output directory.
 
 The local release command builds `OpenSmash-Melee-VERSION-win-x64-Setup.exe`.
-NSIS installs per-user with desktop and Start menu
-shortcuts and uninstall support. Elevation and app-data deletion are disabled.
+NSIS uses a guided per-user setup with an installation directory picker, an
+optional desktop shortcut, a Start menu shortcut, and uninstall support. The
+finish page offers to launch the app. Elevation and app-data deletion are disabled.
 User data stays in the existing Electron profile outside the install directory.
 Never choose the app-data profile as the installation destination. Linux archive
 packaging is unchanged; macOS DMG packaging is described below. Manifests, cloud workers and manual CI
