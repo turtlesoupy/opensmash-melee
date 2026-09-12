@@ -6,10 +6,10 @@ type Setup={state:string;ready:boolean;message:string;progress?:number};
 export default function BootScreen({onReady,showReadyPrompt=false,onCleared}:{onReady:(ready:boolean)=>void;showReadyPrompt?:boolean;onCleared?:()=>void}) {
  const [setup,setSetup]=useState<Setup>({state:'checking',ready:false,message:'Checking local game setup…'});
  const [error,setError]=useState(''),[connectionError,setConnectionError]=useState(''),[transfer,setTransfer]=useState<number|null>(null);
+ const [clearing,setClearing]=useState(false);
  const [extracting,setExtracting]=useState<number|null>(null);
  const archiveCleanup=useRef<(()=>Promise<void>)|undefined>(undefined);
  useEffect(()=>{const cleanup=(event:PageTransitionEvent)=>{if(!event.persisted)void archiveCleanup.current?.();};window.addEventListener('pagehide',cleanup);return()=>window.removeEventListener('pagehide',cleanup);},[]);
- const [clearing,setClearing]=useState(false);
  const input=useRef<HTMLInputElement>(null),request=useRef<XMLHttpRequest|null>(null),ready=useRef(onReady);ready.current=onReady;
  useEffect(()=>{
   if(!desktop()&&usesLocalDisc()){
@@ -57,7 +57,24 @@ export default function BootScreen({onReady,showReadyPrompt=false,onCleared}:{on
   xhr.send(file);
   return true;
  }
- const busy=extracting!==null||transfer!==null||['receiving','installing','checking'].includes(setup.state);
+ async function clearDisc(){
+  setClearing(true);setError('');
+  try{
+   if(!desktop()&&usesLocalDisc())clearLocalDisc();
+   else{
+    const response=await fetch('/api/setup/clear',{method:'POST'});
+    const result=await response.json();
+    if(!response.ok)throw Error(result.error||'Could not clear the disc.');
+    setSetup(result);
+    desktop()?.setGameActive(false);
+    await desktop()?.fullscreen(false);
+   }
+   ready.current(false);
+   onCleared?.();
+  }catch(e){setError((e as Error).message);}
+  finally{setClearing(false);}
+ }
+ const busy=clearing||extracting!==null||transfer!==null||['receiving','installing','checking'].includes(setup.state);
  if(showReadyPrompt&&setup.ready&&!busy&&!error&&!connectionError)return <section className="native-ready" aria-label="Ready to play">
   <div role="status"><h2>Select a character to start</h2><p>Choose a fighter from the roster below.</p></div>
  </section>;
