@@ -10,6 +10,18 @@ static void wr(CPUState*s,uint32_t p,uint64_t v,uint8_t n){(void)s;assert(p>=0x8
 static void w(CPUState*s,unsigned p,unsigned v){wr(s,p,v,4);}
 int main(void){
  CPUState s={0};s.external_read=rd;s.external_write=wr;
+ /* HUD lives select the color stock descriptor, with emblem fallback. */
+ s.gpr[3]=0x81100000;w(&s,s.gpr[3]+0x2c,0x81100100);
+ w(&s,0x80453080+0xb0,0x81100200);w(&s,0x81100228,0x81100300);
+ w(&s,0x81100314,2);w(&s,0x81100384,0x81100400);
+ w(&s,0x81100410,0x81100500);w(&s,0x81100508,0x81100600);
+ w(&s,0x81100600+24,0x4f535549);w(&s,0x81100600+28,8);
+ w(&s,0x81100600+76,0x81100700);w(&s,0x81100600+80,0x81100800);
+ w(&s,0x804A1378+16,0x81100900);w(&s,0x81100918,0x81100a00);
+ w(&s,0x81100a08,0x81100b00);w(&s,0x81100b08,0x81100c00);
+ stock_identity(&s);assert(rd(&s,0x81100c00+88,4)==0x81100700);
+ w(&s,0x81100600+76,0);stock_identity(&s);
+ assert(rd(&s,0x81100c00+88,4)==0x81100800);
  css_registry=0x81000000;css_count=2;css_pages=3;css_page=1;
  for(unsigned i=1;i<=2;i++){unsigned r=css_row(i);w(&s,r,8);w(&s,r+4,i);w(&s,r+8,i);w(&s,r+12,317+i);w(&s,r+24,0x81001000+i*32);}
  assert(css_for_slot(&s,8,1)==1);assert(css_for_slot(&s,8,2)==2);assert(css_for_slot(&s,8,0)==0);

@@ -17,6 +17,36 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CharacterSelectTests(unittest.TestCase):
+    def test_finished_assets_cache_reuses_and_invalidates_inputs(self):
+        game = self.source / 'game'
+        names = ('audio/nr_select.ssm', 'audio/us/nr_select.ssm', 'MnSlChr.dat', 'MnSlChr.usd')
+        for name in names:
+            file = game / 'files' / name
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_bytes(b'original')
+        cache = self.source / 'cache'
+        entries = [(8, 1, self.source)]
+        with patch('opensmash_melee.character_select.extend_menu', return_value=b'menu') as menu, \
+             patch('opensmash_melee.character_select.extend_sound_bank', return_value=(b'bank', [1])):
+            first = character_select_assets(game, entries, cache=cache)
+            self.assertEqual(menu.call_count, 2)
+            self.assertEqual(character_select_assets(game, entries, cache=cache), first)
+            self.assertEqual(menu.call_count, 2)
+            for file, data in ((self.source / 'character.json', b'{"display":"Renamed"}'),
+                               (game / 'files/MnSlChr.dat', b'new disc menu')):
+                file.write_bytes(data)
+                character_select_assets(game, entries, cache=cache)
+            self.assertEqual(menu.call_count, 6)
+            Image.new('RGBA', (80, 100), 'blue').save(self.source / 'portrait_raw.png')
+            character_select_assets(game, entries, cache=cache)
+            self.assertEqual(menu.call_count, 8)
+            character_select_assets(game, [(8, 2, self.source)], cache=cache)
+            self.assertEqual(menu.call_count, 10)
+            for file in cache.glob('select-*.zip'):
+                file.write_bytes(b'interrupted write')
+            self.assertEqual(character_select_assets(game, entries, cache=cache), first)
+            self.assertEqual(menu.call_count, 12)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

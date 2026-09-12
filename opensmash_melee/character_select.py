@@ -9,6 +9,7 @@ import json
 import struct
 import uuid
 import wave
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -247,6 +248,27 @@ def character_select_assets(game, entries, *, cache=None):
         seen.add((fighter, color))
         normalized.append((fighter, color, Path(source)))
     game = Path(game)
+    # Cache the finished menus and sound banks, not just the DSP clips. Hash
+    # source contents so edits, reordered slots, and a new disc invalidate it.
+    names = ('audio/nr_select.ssm', 'audio/us/nr_select.ssm', 'MnSlChr.dat', 'MnSlChr.usd')
+    cached = None
+    if cache is not None:
+        digest = hashlib.sha256(b'opensmash-character-select-assets-v1\0')
+        def add(raw):
+            digest.update(len(raw).to_bytes(8, 'big'))
+            digest.update(raw)
+        for name in names:
+            add((game / 'files' / name).read_bytes())
+        for fighter, color, source in normalized:
+            add(bytes((fighter, color)))
+            for file in (source / 'character.json', portrait_path(source), source / 'announcer.wav'):
+                add(file.read_bytes())
+        cached = Path(cache) / ('select-' + digest.hexdigest() + '.zip')
+        try:
+            with zipfile.ZipFile(cached) as archive:
+                return {name: archive.read(name) for name in names}
+        except (OSError, zipfile.BadZipFile, KeyError, EOFError):
+            pass
     # Build all outputs before replacing any staged hard links.
     outputs = {}
     sources = list(dict.fromkeys(e[2] for e in normalized))
@@ -256,7 +278,23 @@ def character_select_assets(game, entries, *, cache=None):
         outputs[path], ids = extend_sound_bank(path.read_bytes(), [e[2] for e in normalized], clips=clips)
         menu = game / ('files/MnSlChr.usd' if suffix else 'files/MnSlChr.dat')
         outputs[menu] = extend_menu(menu.read_bytes(), normalized, ids)
-    return {path.relative_to(game / 'files').as_posix(): data for path, data in outputs.items()}
+    result = {path.relative_to(game / 'files').as_posix(): data for path, data in outputs.items()}
+    if cached is not None:
+        temporary = cached.with_suffix('.' + uuid.uuid4().hex + '.tmp')
+        try:
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(temporary, 'w') as archive:
+                for name, data in result.items():
+                    archive.writestr(name, data)
+            temporary.replace(cached)
+        except OSError:
+            pass
+        finally:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+    return result
 
 
 def stage_character_select(game, entries, *, cache=None):

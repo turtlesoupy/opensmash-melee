@@ -10,13 +10,13 @@ def rgba8(image):
     height, width = pixels.shape[:2]
     if width % 4 or height % 4 or max(width,height) > 1024:
         raise ValueError('GX RGBA8 needs dimensions divisible by 4, maximum 1024')
-    out = bytearray()
-    for y in range(0,height,4):
-        for x in range(0,width,4):
-            tile = pixels[y:y+4,x:x+4].reshape(16,4)
-            out.extend(tile[:,[3,0]].tobytes())
-            out.extend(tile[:,[1,2]].tobytes())
-    return bytes(out)
+    # GX stores each 4x4 tile as 32 AR bytes followed by 32 GB bytes.
+    # Pack all tiles in NumPy instead of allocating arrays in a Python loop.
+    tiles = pixels.reshape(height // 4, 4, width // 4, 4, 4).transpose(0, 2, 1, 3, 4).reshape(-1, 16, 4)
+    out = np.empty((len(tiles), 2, 16, 2), dtype=np.uint8)
+    out[:, 0] = tiles[:, :, [3, 0]]
+    out[:, 1] = tiles[:, :, [1, 2]]
+    return out.tobytes()
 
 
 def batches(mesh):

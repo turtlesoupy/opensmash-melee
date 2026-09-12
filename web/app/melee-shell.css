@@ -391,8 +391,7 @@ select {
 
 .native-game { padding: 16px; color: #fff2d6; }
 .intro-video-frame:has(.native-game) { aspect-ratio: auto; height: auto; max-height: none; }
-.native-game-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
-.native-game-toolbar h2 { margin: 0; }
+.native-game-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
 .native-game-toolbar > div { display: flex; gap: 8px; }
 .native-game-toolbar button { background: #291b12; color: #fff2d6; border: 1px solid #86613b; padding: 8px 12px; cursor: pointer; }
 .native-game-screen { position: relative; background: #000; display: flex; justify-content: center; }

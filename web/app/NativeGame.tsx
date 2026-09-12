@@ -21,10 +21,10 @@ export default function NativeGame({
   const [hasFrame, setHasFrame] = useState(false);
   const [gameReady, setGameReady] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const loadingStarted = useRef(performance.now());
   useEffect(() => {
     if (hasFrame && gameReady) return;
-    const started = Date.now();
-    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    const timer = setInterval(() => setElapsed(Math.floor((performance.now() - loadingStarted.current) / 1000)), 1000);
     return () => clearInterval(timer);
   }, [hasFrame, gameReady]);
   useEffect(() => {
@@ -79,7 +79,9 @@ export default function NativeGame({
         body: JSON.stringify(body),
         signal: controller.signal,
       });
-      const result = await response.json();
+      const result = await response.json().catch(() => {
+        throw Error(`The local game service returned an unexpected response (${response.status}). Restart OpenSmash Melee and try again.`);
+      });
       if (!response.ok) throw Error(result.error || "Could not launch Melee");
       return result;
     }
@@ -165,7 +167,6 @@ export default function NativeGame({
   return (
     <section className={embedded ? "native-game" : "boot-screen"}>
       <header className="native-game-toolbar">
-        <h2>{fighter.name}</h2>
         <div>
           {embedded && (
             <button

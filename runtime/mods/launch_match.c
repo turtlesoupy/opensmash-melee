@@ -553,8 +553,10 @@ static void stock_identity(CPUState* s) {
     if(!presentation_pointer(data))return;
     unsigned port=moderngekko_mod_read(s,data,1);if(port>=6)return;
     unsigned identity=player_identity(s,port);if(!identity)return;
-    unsigned image=read32(s,identity+80);
-    if(!presentation_pointer(image))image=read32(s,identity+76);
+    /* Lives use the full-color stock artwork; the monochrome emblem is only
+     * a fallback for older costumes without a stock descriptor. */
+    unsigned image=read32(s,identity+76);
+    if(!presentation_pointer(image))image=read32(s,identity+80);
     if(!presentation_pointer(image))return;
     for(unsigned i=1;i<=7;i++) {
         unsigned joint=read32(s,0x804A1378+8+port*0x50+4+i*4);

@@ -11,6 +11,21 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DesktopServiceTests(unittest.TestCase):
+    def test_development_refresh_uses_current_backend_with_staged_catalog(self):
+        from desktop.backend_entry import refresh_code
+        root = self.service.root
+        payload, development, workspace = root / 'payload', root / 'source', root / 'workspace'
+        workspace.mkdir()
+        for name in ('opensmash_melee', 'tools', 'runtime', 'web'):
+            (payload / name).mkdir(parents=True)
+            (payload / name / 'version.txt').write_text('staged')
+            (development / name).mkdir(parents=True)
+            (development / name / 'version.txt').write_text('current')
+        refresh_code(payload, workspace, development)
+        for name in ('opensmash_melee', 'tools', 'runtime'):
+            self.assertEqual((workspace / name / 'version.txt').read_text(), 'current')
+        self.assertEqual((workspace / 'web/version.txt').read_text(), 'staged')
+
     def test_startup_status_tracks_real_milestones(self):
         self.service.process = SimpleNamespace(poll=lambda: None)
         self.service.log.write_text("[staticrecomp] core init\n")

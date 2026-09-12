@@ -1,6 +1,6 @@
 """Desktop protocol v1: validated launch plans, local costumes, and native processes."""
 
-import hashlib, json, os, platform, re, shutil, subprocess, sys, threading, uuid
+import hashlib, json, os, platform, re, subprocess, sys, threading, uuid
 from pathlib import Path
 
 
@@ -411,30 +411,15 @@ class NativeService:
             self.controllers(plan["ports"], plan.get("controls"))
             self.status_message = "Preparing your game files…"
             game = self.root / "build/native-lineup"
-            stage = game.with_name("native-lineup-" + uuid.uuid4().hex)
-
-            def link_or_copy(source, target):
-                try:
-                    os.link(source, target)
-                except OSError:
-                    shutil.copy2(source, target)
-
-            shutil.copytree(self.setup.game, stage, copy_function=link_or_copy)
-            try:
-                for source, name in costumes:
-                    target = stage / "files" / name
-                    target.unlink()
-                    shutil.copy2(source, target)
+            def customize(stage):
                 if costumes:
                     from .character_select import stage_character_select, catalog_identities
                     stage_character_select(stage, catalog_identities(self.root, self.catalog, plan["costumes"]),
                                            cache=self.root / "build/announcer-cache")
-                if game.exists():
-                    shutil.rmtree(game)
-                stage.rename(game)
-            finally:
-                if stage.exists():
-                    shutil.rmtree(stage)
+                    return ['MnSlChr.dat', 'MnSlChr.usd', 'audio/nr_select.ssm', 'audio/us/nr_select.ssm']
+                return []
+            from .game_staging import stage_game
+            stage_game(self.setup.game, game, costumes, customize)
             module = self.runtime / self.manifest["module"]
             runner = self.runtime / self.manifest["runner"]
             environment = {
