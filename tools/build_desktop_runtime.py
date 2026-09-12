@@ -31,7 +31,7 @@ def build(inputs, out):
         "keyboard-no-beep.patch", "zz-electron-embedded.patch", "windows-sdk-compat.patch",
         "zz-graceful-stop.patch",
         "zz-performance.patch", "zz-windows-jit.patch", "zz-startup.patch", "zzz-jit-memory.patch", "zz-startup-cancel.patch",
-        "zzzz-mod-boundaries.patch"
+        "zzzz-mod-boundaries.patch", "zz-embedded-background-input.patch"
     ]])
     host = ROOT / "build/desktop-runtime-host"
     module = ROOT / "build/desktop-runtime-module"
