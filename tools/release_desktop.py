@@ -19,11 +19,26 @@ def run(*args, capture=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--commit", help="Exact release SHA; defaults to freshly fetched origin/main")
     parser.add_argument("--inputs", type=Path, default=ROOT / "build/desktop-inputs/native-inputs-v3.tar.gz")
     parser.add_argument("--characters", type=Path, default=ROOT / "build/desktop-inputs/characters.tar.gz")
     args = parser.parse_args()
     if run("git", "status", "--porcelain", "--untracked-files=no", capture=True).stdout.strip():
         raise SystemExit("Commit tracked changes before building a release.")
+    run("git", "fetch", "origin")
+    target = args.commit or "origin/main"
+    if args.commit and (len(args.commit) != 40 or any(c not in "0123456789abcdef" for c in args.commit)):
+        raise SystemExit("--commit must be a full 40-character commit SHA.")
+    expected = run("git", "rev-parse", target + "^{commit}", capture=True).stdout.strip()
+    run("git", "merge", "--ff-only", expected)
+    if run("git", "rev-parse", "HEAD", capture=True).stdout.strip() != expected:
+        raise SystemExit("Checkout is ahead of or diverged from the release commit; use a clean checkout.")
+    # Re-exec after a fast-forward so release tooling also comes from that commit.
+    if os.environ.get("OPENSMASH_RELEASE_SYNCED") != expected:
+        os.environ["OPENSMASH_RELEASE_SYNCED"] = expected
+        run(sys.executable, Path(__file__), "--commit", expected,
+            "--inputs", args.inputs.resolve(), "--characters", args.characters.resolve())
+        return
     for path in (args.inputs, args.characters):
         if not path.is_file():
             raise SystemExit(f"Missing private build input: {path}")

@@ -16,8 +16,10 @@ this Mac or on tj64-forge.
 
 Set `buildMode` to `local` in `infra/gcp/release.json`, update the desktop version
 with `npm --prefix desktop version VERSION --no-git-tag-version`, and commit.
-On each builder, fetch and check out that exact commit before packaging. Keep the
-checkout unchanged while a build is running. Each machine builds its native
+The local command fetches origin and fast-forwards to latest `origin/main` before
+building. Pass `--commit FULL_SHA` on each builder to pin a coordinated release;
+it fetches and verifies that exact commit, refusing dirty or divergent checkouts.
+Keep the checkout unchanged while a build is running. Each machine builds its native
 architecture; Apple Silicon builds macOS arm64, and the Windows desktop builds
 Windows x64. Linux can be omitted.
 

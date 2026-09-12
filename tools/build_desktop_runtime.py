@@ -12,6 +12,10 @@ def run(*args):
 
 def build(inputs, out):
     source = ROOT / "build/desktop-runtime-source"
+    # Extraction over a previous patched tree leaves added files behind, making
+    # the next patch application inconsistent. Keep compiled caches separately.
+    if source.exists():
+        shutil.rmtree(source)
     source.mkdir(parents=True, exist_ok=True)
     with tarfile.open(inputs) as archive:
         archive.extractall(source, filter="data")
