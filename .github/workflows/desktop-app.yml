@@ -86,6 +86,7 @@ jobs:
         with:
           name: opensmash-melee-${{ matrix.key }}-${{ github.sha }}
           path: |
+            build/desktop-artifacts/*-Setup.exe
             build/desktop-artifacts/*.zip
             build/desktop-artifacts/*.tar.gz
             build/desktop-artifacts/build-manifest.json

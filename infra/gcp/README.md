@@ -127,3 +127,31 @@ release startup script with Windows PowerShell. A byte-array metadata decoding
 issue was corrected during this check. Local tests: 74 passed, including release
 ref validation and cleanup on provisioning failure. Full application compilation
 is deliberately deferred to a release tag.
+
+## Windows installer
+
+Use `--artifacts build/installer-candidate --commit FULL_SHA` for an isolated
+local candidate output directory.
+
+The local release command builds `OpenSmash-Melee-VERSION-win-x64-Setup.exe`.
+NSIS installs per-user with desktop and Start menu
+shortcuts and uninstall support. Elevation and app-data deletion are disabled.
+User data stays in the existing Electron profile outside the install directory.
+Never choose the app-data profile as the installation destination. macOS ZIP and
+Linux archive targets are unchanged. Manifests, cloud workers and manual CI
+collect the installer executable.
+
+Before publishing, test clean installation, installed launcher startup and
+`python tools/verify_desktop_package.py "INSTALL_DIR/resources"`, reinstall,
+upgrade and uninstall using a disposable profile. Verify retained data and
+shortcut/registry cleanup. Record duration, file count, bytes and SHA256. State
+the extraction tool and disk/cache conditions for ZIP comparisons; a command-line
+benchmark does not establish Explorer speed. Upload private candidates under
+`installer-candidates/COMMIT/windows-x64/`, separate from published releases.
+
+The offline NSIS installer uses a ZIP payload (`useZip: true`,
+`differentialPackage: false`). The first Windows trial installed this payload in
+33.7 seconds versus roughly 2.5 minutes for the default 7z payload; these are
+single-machine warm-cache trials, not Explorer benchmarks. ZIP trades a larger
+download for faster extraction. There is no automatic updater or differential
+update feed; upgrades use the full installer. Revisit this setting if adding one.
