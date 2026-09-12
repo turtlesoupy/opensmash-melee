@@ -54,6 +54,16 @@ export default function Game({fighter,settings,roster,onClose}:{fighter:Fighter;
     const asset=await fetch(costume.url,{signal:abort.signal});if(!asset.ok)throw Error('The costume could not load.');
     return {filename:costume.filename,blob:await asset.blob()};
    }));
+   const cssAssets = [];
+   if (costumes.length) {
+    setStatus('Preparing character select…');
+    const response = await fetch('/api/character-select', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({costumes:launchPlan.costumes}), signal:abort.signal});
+    const prepared = await response.json();if(!response.ok)throw Error(prepared.error || 'Character select could not be prepared.');
+    for (const entry of prepared.assets) {
+     const asset = await fetch(entry.url, {signal:abort.signal});if(!asset.ok)throw Error('Character select assets could not load.');
+     cssAssets.push({filename:entry.filename,blob:await asset.blob()});
+    }
+   }
    setStatus('Loading Melee…');if(closed)return;
    const audio=session.audio;
    const startAudio=()=>{if(audioConnecting)return;audioConnecting=true;connectAudio(audio).then(node=>{if(closed)node.disconnect();else audioNode=node;}).catch(()=>{audioConnecting=false;});};
@@ -75,7 +85,7 @@ export default function Game({fighter,settings,roster,onClose}:{fighter:Fighter;
     }
    };
    await session.ready;if(closed)return;running=true;
-   worker.postMessage({type:'select',requestedAt,warmReadyBeforeClick:session.readyAt<=requestedAt,character:fighter.slug,skin,fighter:launchPlan.ports[0].fighter,launch:launchPlan,costumes});
+   worker.postMessage({type:'select',requestedAt,warmReadyBeforeClick:session.readyAt<=requestedAt,character:fighter.slug,skin,fighter:launchPlan.ports[0].fighter,launch:launchPlan,costumes,cssAssets});
    raf=requestAnimationFrame(()=>send());
   }catch(e){if(!closed)setError((e as Error).message);}}
   start();

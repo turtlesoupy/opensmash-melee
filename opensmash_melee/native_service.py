@@ -46,20 +46,22 @@ class NativeService:
             with self.log.open("rb") as stream:
                 stream.seek(max(0, self.log.stat().st_size - 16000))
                 text = stream.read().decode(errors="replace")
-        phases = [
-            "Checking game files...",
-            "Initializing graphics and loading shaders...",
-            "Booting Melee... Press J if a memory-card prompt appears.",
-            "Loading fighters and stage...",
+        milestones = [
+            ("mod loaded:", "Opening your game…"),
+            ("[staticrecomp] core init", "Loading game data…"),
+            ("[staticrecomp] module loaded:", "Loading fighters and stage…"),
+            ("[staticrecomp] execution=", "Booting Melee… Press J if a memory-card prompt appears."),
+            ("[opensmash] launch mode=", "Preparing your match…"),
+            ("[opensmash] preparing first scene", "Getting the first scene ready…"),
+            ("[opensmash] destination ready", "Game is running."),
+            ("[opensmash] combat started", "Game is running."),
         ]
-        for index, marker in enumerate([
-            "mod loaded:", "[staticrecomp] execution=", "[opensmash] launch fighter=",
-            "[opensmash] destination ready", "[opensmash] combat started",
-        ], 1):
-            if marker in text and running:
-                self.startup_phase = max(self.startup_phase, min(index, 4))
-        ready = self.startup_phase == 4
-        starting = phases[min(self.startup_phase, 3)]
+        if running:
+            for step, (marker, _) in enumerate(milestones, 1):
+                if marker in text:
+                    self.startup_phase = max(self.startup_phase, step)
+        ready = self.startup_phase >= 7
+        starting = milestones[self.startup_phase - 1][1] if self.startup_phase else "Checking game files…"
         return {
             "protocol": 1,
             "session": self.session,
@@ -67,7 +69,7 @@ class NativeService:
             "ready": running and ready,
             "exitCode": self.process.poll() if self.process else None,
             "message": (
-                ("Game is running." if os.environ.get("OPENSMASH_INPUT_FILE") else "Game is running in its native window.")
+                "Game is running."
                 if running and ready
                 else starting if running else self.status_message
             ),
@@ -111,7 +113,7 @@ class NativeService:
             self.stop()
             self.session = session
             self.process = None
-            self.status_message = "Preparing your character…"
+            self.status_message = "Preparing your characterâ€¦"
             return self.status()
 
     def validate(self, plan):
@@ -347,9 +349,14 @@ class NativeService:
             if self.process and self.process.poll() is None:
                 raise ValueError("Close the current game first")
             packed, costumes = self.validate(plan)
-            self.status_message = "Setting up controllers..."
+            if costumes and self.manifest.get("characterSelect") != 1:
+                raise ValueError("Update the desktop runtime to use character select injection.")
+            self.session = session
+            self.process = None
+            self.startup_phase = 0
+            self.status_message = "Connecting your controllersâ€¦"
             self.controllers(plan["ports"])
-            self.status_message = "Preparing game files..."
+            self.status_message = "Preparing your game filesâ€¦"
             game = self.root / "build/native-lineup"
             stage = game.with_name("native-lineup-" + uuid.uuid4().hex)
 
@@ -365,6 +372,9 @@ class NativeService:
                     target = stage / "files" / name
                     target.unlink()
                     shutil.copy2(source, target)
+                if costumes:
+                    from .character_select import stage_character_select, catalog_identities
+                    stage_character_select(stage, catalog_identities(self.root, self.catalog, plan["costumes"]))
                 if game.exists():
                     shutil.rmtree(game)
                 stage.rename(game)

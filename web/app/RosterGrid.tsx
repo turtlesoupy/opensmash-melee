@@ -57,14 +57,14 @@ export default function RosterGrid({
   query,
   onQuery,
   onChoose,
-  onRandom,
+  onCreate,
   paused,
 }: {
   fighters: Fighter[];
   query: string;
   onQuery: (s: string) => void;
   onChoose: (f: Fighter) => void;
-  onRandom: () => void;
+  onCreate: () => void;
   paused: boolean;
 }) {
   const [columns, setColumns] = useState(() => (innerWidth >= 800 ? 8 : innerWidth >= 640 ? 6 : 4));
@@ -140,9 +140,10 @@ export default function RosterGrid({
         <button
           className="replica-cell is-create"
           style={cell(1)}
-          onClick={onRandom}
-          disabled={!fighters.length}
-          aria-label="Random fighter"
+          onClick={onCreate}
+          aria-label="Create fighter"
+          data-kind="create"
+          type="button"
         >
           <span className="replica-action-static-layer">
             <img
@@ -151,10 +152,8 @@ export default function RosterGrid({
               alt=""
             />
           </span>
-          <span className="random-icon" aria-hidden="true">
-            ?
-          </span>
-          <Caption text="RANDOM" />
+          <img className="replica-action-icon is-create" src="/brand/Plus.png" alt="" aria-hidden="true" draggable={false} />
+          <Caption text="CREATE" />
         </button>
         {fighters.map((f, i) => (
           <button

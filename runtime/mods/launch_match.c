@@ -27,7 +27,11 @@ int opensmash_destination_ready(void) { return destination_ready || original_pac
 #include <emscripten.h>
 #include <emscripten/threading.h>
 static const char* costume_names[] = {"PlMrNr.dat", "PlMrYe.dat", "PlMrBk.dat", "PlMrBu.dat", "PlMrGr.dat", "PlLgNr.dat", "PlLgWh.dat", "PlLgAq.dat", "PlLgPi.dat", "PlCaNr.dat", "PlCaGy.dat", "PlCaRe.dat", "PlCaWh.dat", "PlCaGr.dat", "PlCaBu.dat", "PlFxNr.dat", "PlFxOr.dat", "PlFxLa.dat", "PlFxGr.dat", "PlMsNr.dat", "PlMsRe.dat", "PlMsGr.dat", "PlMsBk.dat", "PlMsWh.dat", "PlLkNr.dat", "PlLkRe.dat", "PlLkBu.dat", "PlLkBk.dat", "PlLkWh.dat"};
-static unsigned costume_sizes[29];
+static unsigned costume_sizes[29], css_sizes[4];
+static const char* css_names[]={"MnSlChr.dat","MnSlChr.usd","nr_select.ssm","nr_select.ssm"};
+EMSCRIPTEN_KEEPALIVE void opensmash_css_size(unsigned slot,unsigned size) {
+    if(slot>=4 || !size || size>16777216)abort();css_sizes[slot]=size;
+}
 EMSCRIPTEN_KEEPALIVE void opensmash_costume_size(unsigned slot,unsigned size) {if(slot<sizeof(costume_sizes)/sizeof(costume_sizes[0]) && size>=32 && size<=2097152)costume_sizes[slot]=size;else abort();}
 static atomic_uint combat_frames;
 /* Browser-only first-scene barrier. Use Melee's scheduler pause bits so the
@@ -53,7 +57,7 @@ EMSCRIPTEN_KEEPALIVE void opensmash_configure_launch(int mode,int stage,int leve
 }
 #endif
 
-static int requested = 0, prepared = 0, launched = 0, css_frames = 0;
+static int requested = 0, prepared = 0, classic_prepared = 0, launched = 0, css_frames = 0;
 
 static unsigned read32(CPUState* s, unsigned address) {
     return (unsigned)moderngekko_mod_read(s, address, 4);
@@ -107,11 +111,21 @@ static void scene_main(CPUState* s) {
         unsigned fst=read32(s,0x80000038), count=read32(s,fst+8), changed=0;
         if(fst<0x80000000 || fst>=0x81800000 || count>10000)abort();
         unsigned strings=fst+count*12;
+        unsigned select_bank=0;
         for(unsigned i=1;i<count;i++) {
             unsigned entry=fst+i*12, type=read32(s,entry);
             if(type>>24)continue;
             char name[32]={0};unsigned address=strings+(type&0xffffff);
             for(unsigned j=0;j<31;j++){name[j]=moderngekko_mod_read(s,address+j,1);if(!name[j])break;}
+            /* FST traverses audio/nr_select then audio/us/nr_select. Both menu
+             * archives and both sound banks are staged before scene routing. */
+            for(unsigned slot=0;slot<4;slot++) {
+                if(!strcmp(name,css_names[slot])) {
+                    if(slot>=2)slot=2+select_bank++;
+                    if(slot<4 && css_sizes[slot])moderngekko_mod_write(s,entry+8,css_sizes[slot],4);
+                    break;
+                }
+            }
             for(unsigned slot=0;slot<sizeof(costume_sizes)/sizeof(costume_sizes[0]);slot++)
                 if(!strcmp(name,costume_names[slot]) && costume_sizes[slot]) {
                     moderngekko_mod_write(s,entry+8,costume_sizes[slot],4);changed++;break;
@@ -165,12 +179,13 @@ static void vs_on_load(CPUState* s) {
     s->pc = s->lr;
 }
 static void menu_enter(CPUState* s) {
-    if(launch_mode==1 && !destination_ready) {vs_on_load(s);write8(s,s->gpr[3],2);write8(s,s->gpr[3]+1,0);write8(s,s->gpr[3]+2,1);}
+    if(launch_mode==1 && !destination_ready) {unsigned pc=s->pc;vs_on_load(s);s->pc=pc;write8(s,s->gpr[3],2);write8(s,s->gpr[3]+1,0);write8(s,s->gpr[3]+2,1);}
 }
 static void title_frame(CPUState* s) {(void)s;if(launch_mode==4)mark_ready();}
 static void menu_frame(CPUState* s) {(void)s;if(launch_mode==1)mark_ready();}
 static void classic_enter(CPUState* s) {
-    if(launch_mode!=3)return;
+    if(!requested || launch_mode!=3 || classic_prepared)return;
+    classic_prepared=1;
     unsigned prefs=read32(s,0x804D3EE0);
     moderngekko_mod_write(s,prefs+0x1868,0x7FF,2);
     write8(s,prefs+0x51C,port_config[0]&255);write8(s,prefs+0x51D,stocks);
@@ -479,7 +494,9 @@ static void normalized_draw(CPUState* s) {
     s->gpr[4]=dest;
     static unsigned reported; if(!reported){reported=identity;fprintf(stderr,"[opensmash] stature scale=%.4f offset=%.4f root=%08x\n",scale,offset,root);}
 }
+static void css_draw_root_begin(CPUState* s);
 static void normalized_draw_patch(CPUState* s) {
+    css_draw_root_begin(s);
 #ifdef __EMSCRIPTEN__
     preparation_poll(s);
 #endif
@@ -528,7 +545,17 @@ static void damage_emblem(CPUState* s) {
         return;
     }
 }
+#include "character_select.h"
+
 static const ModernGekkoModHook hooks[] = {
+    RECOMP_HOOK(0x802640A0, css_enter_identity),
+    RECOMP_HOOK(0x80266D70, css_exit_identity),
+    RECOMP_HOOK_RETURN(0x80266D70, css_exited_identity),
+    RECOMP_HOOK(0x8025D5AC, css_door_identity),
+    RECOMP_HOOK(0x802602A0, css_cursor_begin),
+    RECOMP_HOOK_RETURN(0x802602A0, css_cursor_end),
+    RECOMP_HOOK(0x80023870, css_announce),
+    RECOMP_HOOK_RETURN(0x803709DC, css_draw_root_end),
 
     RECOMP_HOOK(0x8005FDDC, flash_begin),
     RECOMP_HOOK(0x802A7D8C, held_item_begin),
@@ -554,6 +581,8 @@ static const ModernGekkoModHook hooks[] = {
     RECOMP_HOOK(0x80388278, report_assert),
 };
 static const ModernGekkoModPatch patches[] = {
+    RECOMP_PATCH(0x80160980, css_name_patch),
+    RECOMP_PATCH(0x803896F0, css_voice_patch),
     RECOMP_PATCH(0x800674F8, flash_return_patch),
     RECOMP_PATCH(0x80067568, flash_return_patch),
     RECOMP_PATCH(0x803709DC, normalized_draw_patch),

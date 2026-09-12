@@ -11,6 +11,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DesktopServiceTests(unittest.TestCase):
+    def test_startup_status_tracks_real_milestones(self):
+        self.service.process = SimpleNamespace(poll=lambda: None)
+        self.service.log.write_text("[staticrecomp] core init\n")
+        self.assertEqual(self.service.status()["message"], "Loading game data…")
+        self.service.log.write_text("[opensmash] launch mode=0\n")
+        self.assertEqual(self.service.status()["message"], "Preparing your match…")
+        self.service.log.write_text("unrelated output\n")
+        self.assertEqual(self.service.status()["message"], "Preparing your match…")
+        self.service.log.write_text("[opensmash] destination ready\n")
+        self.assertTrue(self.service.status()["ready"])
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

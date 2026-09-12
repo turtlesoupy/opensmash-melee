@@ -1,11 +1,12 @@
 import Controls from "./Controls";
+import {announceCharacter, stopAnnouncer} from "@/lib/announcer";
 import {preferences} from '@/lib/desktop';
 import { useEffect, useMemo, useRef, useState } from "react";
 import Game from "./Game";
 import NativeGame from "./NativeGame";
 import {desktop} from "@/lib/desktop";
 import BootScreen from "./BootScreen";
-import LaunchSettings from "./LaunchSettings";
+import SettingsMenu from "./SettingsMenu";
 import RosterGrid, { FrameRule } from "./RosterGrid";
 import SiteDialog from "./SiteDialog";
 import ImportCharacter from "./ImportCharacter";
@@ -33,6 +34,16 @@ export const names: Record<string, string> = {
 const ranks = new Map(order.map((slug, index) => [slug, index]));
 export default function Home() {
   const [gameReady,setGameReady]=useState(false);
+  useEffect(() => {
+    const hidden = () => { if (document.hidden) stopAnnouncer(); };
+    document.addEventListener('visibilitychange', hidden);
+    window.addEventListener('blur', stopAnnouncer);
+    return () => {
+      document.removeEventListener('visibilitychange', hidden);
+      window.removeEventListener('blur', stopAnnouncer);
+      stopAnnouncer();
+    };
+  }, []);
   const [settings, setSettings] = useState(loadSettings);
   const [roster, setRoster] = useState<Fighter[]>([]),
     [query, setQuery] = useState(""),
@@ -41,7 +52,7 @@ export default function Home() {
       null,
     ),
     [error, setError] = useState("");
-  const [dialog, setDialog] = useState<"Settings" | "Controls" | "About" | "Import character" | null>(null);
+  const [dialog, setDialog] = useState<"Settings" | "Controls" | "About" | "Create" | null>(null);
   const frame = useRef<HTMLDivElement>(null),
     launchId = useRef(0);
   useEffect(() => {
@@ -77,6 +88,7 @@ export default function Home() {
   const choose = (fighter: Fighter) => {
     if(!gameReady){setError("Choose and verify your Melee ISO in the boot screen first.");frame.current?.scrollIntoView({block:"start"});return;}
     setError("");
+    announceCharacter(fighter.slug);
     void unlockAudio().catch(() => {});
     setSelected({ id: ++launchId.current, fighter, settings: structuredClone(settings) });
     frame.current?.scrollIntoView({ block: "start", behavior: "instant" });
@@ -96,7 +108,7 @@ export default function Home() {
       <main className="arena-shell" aria-label="Smash.fun Melee character grid">
         <header className="retro-site-header">
           <a
-            className="retro-site-logo"
+            className="retro-site-logo melee-wordmark"
             href="#"
             onClick={(e) => {
               e.preventDefault();
@@ -104,17 +116,12 @@ export default function Home() {
               setQuery("");
               setTarget("all");
             }}
-            aria-label="Smash.fun Melee home"
+            aria-label="SMASH.FUN MELEE Alpha home"
           >
-            <img
-              className="hero-logo-fallback"
-              src="/brand/smash-the-weights-logo.png"
-              alt="Smash.fun"
-              draggable="false"
-            />
+            <span className="melee-wordmark-name">SMASH.FUN <span>MELEE</span></span>
+            <span className="melee-alpha-tag">ALPHA</span>
           </a>
           <nav className="retro-site-nav" aria-label="Site information and settings">
-            <button className="retro-site-link" onClick={()=>setDialog("Import character")}>Import character</button>
             <button className="retro-site-link" onClick={() => setDialog("About")}>
               About
             </button>
@@ -178,6 +185,7 @@ export default function Home() {
         </header>
         <section
           className="intro-video-stage"
+          style={!selected && gameReady ? {display:"none"} : undefined}
           aria-label={selected ? "Melee game" : "Smash.fun introduction"}
         >
           <div ref={frame} className={`intro-video-frame ${selected ? "is-game-running" : ""}`}>
@@ -190,7 +198,7 @@ export default function Home() {
                 onClose={() => setSelected(null)}
               />
             ) : (
-              <BootScreen settings={settings} onChange={setSettings} onReady={setGameReady} onSettings={()=>setDialog("Settings")}/>
+              <BootScreen onReady={setGameReady}/>
             )}
             <FrameRule />
           </div>
@@ -200,9 +208,7 @@ export default function Home() {
           query={query}
           onQuery={setQuery}
           onChoose={choose}
-          onRandom={() => {
-            if (filtered.length) choose(filtered[Math.floor(Math.random() * filtered.length)]);
-          }}
+          onCreate={() => setDialog("Create")}
           paused={!!selected}
         />
         <div className="roster-status" role="status">
@@ -225,30 +231,10 @@ export default function Home() {
       </main>
       {dialog && (
         <SiteDialog title={dialog} onClose={() => setDialog(null)}>
-          {dialog === "Import character" && <ImportCharacter onImported={fighter=>setRoster(previous=>[fighter,...previous.filter(f=>f.slug!==fighter.slug)])} onPlay={fighter=>{setDialog(null);choose(fighter);}}/>}
+          {dialog === "Create" && <ImportCharacter onImported={fighter=>setRoster(previous=>[fighter,...previous.filter(f=>f.slug!==fighter.slug)])} onPlay={fighter=>{setDialog(null);choose(fighter);}}/>}
           {dialog === "Settings" && (
-            <>
-              <LaunchSettings value={settings} onChange={setSettings} roster={roster} />
-              <label className="moveset-filter">
-                Roster moveset filter
-                <select
-                  aria-label="Filter by Melee fighter"
-                  value={target}
-                  onChange={(e) => setTarget(e.target.value)}
-                >
-                  <option value="all">All Melee fighters</option>
-                  {Object.entries(names).map(([key, name]) => (
-                    <option key={key} value={key}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <p>Changes apply to the next launch.</p>
-              <button className="retro-site-link" onClick={() => setDialog("Controls")}>
-                View controls
-              </button>
-            </>
+            <SettingsMenu value={settings} onChange={setSettings} roster={roster}
+              target={target} onTarget={setTarget} onReady={setGameReady} onClose={()=>setDialog(null)} />
           )}
           {dialog === "Controls" && <Controls />}
           {dialog === "About" && (
@@ -258,17 +244,10 @@ export default function Home() {
                 using its original game engine.
               </p>
               <p>
-                {roster.length.toLocaleString()} custom characters retargeted across six Melee
+                {roster.length.toLocaleString()} custom characters with six Melee
                 fighters. Select a portrait to play, or choose a different launch mode in Settings.
               </p>
-              <p>
-                This local development build uses your verified Melee 1.02 ROM. The introduction
-                video is the original Smash.fun trailer.
-              </p>
-              <p>
-                Character creation is still supplied by the original OpenSmash pipeline; this picker
-                launches the imported roster.
-              </p>
+              <p>Create a character on smash.fun, then import it here to add it to your roster.</p>
             </>
           )}
         </SiteDialog>

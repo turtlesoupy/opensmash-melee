@@ -1,9 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {desktop} from '@/lib/desktop';
-import {schema,type Settings} from '@/lib/launch';
 type Setup={state:string;ready:boolean;message:string;progress?:number};
-const descriptions:Record<number,string>={0:'Jump straight into a match with your chosen rules.',1:'Open the VS menu to choose how to play.',2:'Choose your fighters and stage inside Melee.',3:'Choose a fighter for Classic mode.',4:'Start at the original title screen. Navigate to Adventure, All-Star, Training, Events and other modes in-game.'};
-export default function BootScreen({settings,onChange,onReady,onSettings}:{settings:Settings;onChange:(s:Settings)=>void;onReady:(ready:boolean)=>void;onSettings:()=>void}) {
+export default function BootScreen({onReady}:{onReady:(ready:boolean)=>void}) {
  const [setup,setSetup]=useState<Setup>({state:'checking',ready:false,message:'Checking local game setup…'});
  const [error,setError]=useState(''),[connectionError,setConnectionError]=useState(''),[transfer,setTransfer]=useState<number|null>(null);
  const input=useRef<HTMLInputElement>(null),request=useRef<XMLHttpRequest|null>(null),ready=useRef(onReady);ready.current=onReady;
@@ -35,19 +33,15 @@ export default function BootScreen({settings,onChange,onReady,onSettings}:{setti
   xhr.send(file);
  }
  const busy=transfer!==null||['receiving','installing','checking'].includes(setup.state);
- return <section className="boot-screen launch-settings" aria-label="Game setup and launch mode">
-  <div className="boot-heading"><h2>How do you want to play?</h2><button className="retro-site-link" onClick={onSettings}>Players & rules</button></div>
-  <label>Start in<select aria-label="Start in" value={settings.mode} onChange={e=>onChange({...settings,mode:+e.target.value})}>{schema.modes.map(m=><option key={m.id} value={m.id}>{m.id===3?'Classic character select':m.id===4?'Original title & all modes':m.label}</option>)}</select></label>
-  <p>{descriptions[settings.mode]} Choose a character below to launch.</p>
-  {settings.mode !== 0 && <p>Want to play immediately? <button className="retro-site-link" onClick={()=>onChange({...settings,mode:0})}>Start a Free-for-All instead</button></p>}
+ return <section className="boot-screen launch-settings" aria-label="Game disc">
   <div className="boot-disc">
-   <p role="status">{transfer!==null?`Copying and checking disc… ${Math.round(transfer*100)}%`:setup.message}</p>
+   <p role="status">{transfer!==null?`Copying and checking disc… ${Math.round(transfer*100)}%`:setup.state==='failed'||setup.state==='error'?setup.message:setup.ready?'Ready to play.':busy?'Preparing your game…': 'Choose your Melee disc to get started.'}</p>
    {busy&&<progress aria-label="Disc setup progress" {...(transfer!==null?{value:transfer,max:1}:{})}/>}
    {(error||connectionError)&&<p role="alert">{error||connectionError}</p>}
    <input ref={input} type="file" accept=".iso,.gcm" aria-label="Choose Melee ISO or GCM" hidden onChange={e=>{select(e.target.files?.[0]);e.target.value='';}}/>
    <button className="boot-action" disabled={busy&&transfer===null&&!error&&!connectionError||transfer!==null} onClick={async()=>{if(desktop()){try{setError('');await desktop()!.chooseDisc();}catch(e){setError((e as Error).message);}}else input.current?.click();}}>{setup.ready?'Choose another disc':'Choose Melee ISO / GCM'}</button>
    {transfer!==null&&<button className="retro-site-link" onClick={()=>request.current?.abort()}>Cancel transfer</button>}
-   <small>Your disc stays on this computer. We check the complete USA 1.02 hash before preparing it, then remember the verified game for next time.</small>
+   <small>Your disc stays on this computer. Choose your Melee USA 1.02 disc once to get started.</small>
   </div>
  </section>;
 }
