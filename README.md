@@ -6,7 +6,7 @@ Super Smash Bros. Melee with custom fighters, from the same team that built [Ope
 
 ## Download
 
-Choose your platform, then download the matching file from the release's **Assets** section. Run the Windows `-Setup.exe` installer, then open OpenSmash Melee from the Start menu or desktop shortcut. Installation is for your account and requires no administrator access. Older releases, including v0.3.0, offer a ZIP instead: extract it before opening the app. On macOS, extract the ZIP before opening the app.
+Choose your platform, then download the matching file from the release's **Assets** section. Run the Windows `-Setup.exe` installer, then open OpenSmash Melee from the Start menu or desktop shortcut. Installation is for your account and requires no administrator access. Older releases may offer a ZIP instead: extract it before opening the app. On macOS, extract the ZIP before opening the app.
 
 | Platform | Releases | File to choose |
 | --- | --- | --- |
