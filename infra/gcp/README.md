@@ -155,3 +155,25 @@ The offline NSIS installer uses a ZIP payload (`useZip: true`,
 single-machine warm-cache trials, not Explorer benchmarks. ZIP trades a larger
 download for faster extraction. There is no automatic updater or differential
 update feed; upgrades use the full installer. Revisit this setting if adding one.
+
+## macOS disk images
+
+Normal macOS release builds now produce a branded drag-to-Applications DMG.
+`desktop/installer/dmg-background.png` and its Retina variant are generated with
+`python tools/draw_dmg_background.py` using Pillow and the bundled OFL fonts.
+The Finder window is 640 by 400 points; the app and Applications link are placed
+at the two icon centers configured in `desktop/package.json`.
+
+The manual Desktop launcher apps workflow has a `mac_dmg_only` migration option
+for wrapping an existing published Apple Silicon ZIP without rebuilding the app.
+It requires the ZIP and its original platform manifest on the selected release;
+`release_tag` must match the desktop version. The job verifies that source archive,
+builds the DMG, verifies/mounts it read-only, checks the Applications link and
+Finder metadata, copies the app to a temporary directory, runs the package tests,
+and checks isolated launcher startup. Screenshots are collected when the hosted
+runner supports them. It uploads workflow artifacts only, never a public release.
+The manifest distinguishes packaging source from original application source.
+
+Before replacing a release ZIP, inspect the mounted Finder layout and confirm the
+DMG checksum and package test report. Keep platform manifests and SHA256SUMS in
+sync. A DMG does not add code signing or notarization to an unsigned app.

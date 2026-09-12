@@ -17,6 +17,7 @@ class DesktopArtifactsTest(unittest.TestCase):
             output = Path(directory)
             names = [f"OpenSmash-Melee-{version}-win-x64-Setup.exe",
                      f"OpenSmash-Melee-{version}-mac-arm64.zip",
+                     f"OpenSmash-Melee-{version}-mac-arm64.dmg",
                      f"OpenSmash-Melee-{version}-linux-x64.tar.gz"]
             for name in names:
                 (output / name).write_bytes(name.encode())
