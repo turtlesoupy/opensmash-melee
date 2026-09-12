@@ -8,7 +8,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--output", type=Path, default=root / "build/desktop-artifacts")
 out = parser.parse_args().output
 version = json.loads((root / "desktop/package.json").read_text())["version"]
-artifacts = sorted([*out.glob(f"OpenSmash-Melee-{version}-*.zip"), *out.glob(f"OpenSmash-Melee-{version}-*.tar.gz"), *out.glob(f"OpenSmash-Melee-{version}-*-Setup.exe")])
+artifacts = sorted([*out.glob(f"OpenSmash-Melee-{version}-*.dmg"), *out.glob(f"OpenSmash-Melee-{version}-*.zip"), *out.glob(f"OpenSmash-Melee-{version}-*.tar.gz"), *out.glob(f"OpenSmash-Melee-{version}-*-Setup.exe")])
 if not artifacts:
     raise SystemExit("No desktop distributables were built")
 manifest = {

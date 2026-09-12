@@ -64,7 +64,7 @@
     ],
     "mac": {
       "target": [
-        "zip"
+        "dmg"
       ],
       "category": "public.app-category.games",
       "identity": null
@@ -101,6 +101,30 @@
       "packElevateHelper": false,
       "differentialPackage": false,
       "useZip": true
+    },
+    "dmg": {
+      "title": "OpenSmash Melee ${version}",
+      "background": "installer/dmg-background.png",
+      "iconSize": 96,
+      "iconTextSize": 13,
+      "window": {
+        "width": 640,
+        "height": 400
+      },
+      "contents": [
+        {
+          "x": 170,
+          "y": 226,
+          "type": "file"
+        },
+        {
+          "x": 470,
+          "y": 226,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "publish": []
     }
   }
 }

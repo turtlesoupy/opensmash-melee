@@ -6,12 +6,12 @@ Super Smash Bros. Melee with custom fighters, from the same team that built [Ope
 
 ## Download
 
-Choose your platform, then download the matching file from the release's **Assets** section. Run the Windows `-Setup.exe` installer, then open OpenSmash Melee from the Start menu or desktop shortcut. Installation is for your account and requires no administrator access. Older releases may offer a ZIP instead: extract it before opening the app. On macOS, extract the ZIP before opening the app.
+Choose your platform, then download the matching file from the release's **Assets** section. Run the Windows `-Setup.exe` installer, then open OpenSmash Melee from the Start menu or desktop shortcut. Installation is for your account and requires no administrator access. Older releases may offer a ZIP instead: extract it before opening the app. On macOS, open the DMG and drag OpenSmash Melee into Applications, then open it from Applications and eject the disk image.
 
 | Platform | Releases | File to choose |
 | --- | --- | --- |
 | Windows (64-bit) | [Download for Windows](https://github.com/turtlesoupy/opensmash-melee/releases) | `OpenSmash-Melee-…-win-x64-Setup.exe` (older releases: `.zip`) |
-| macOS (Apple Silicon) | [Download for Apple Silicon](https://github.com/turtlesoupy/opensmash-melee/releases) | `OpenSmash-Melee-…-mac-arm64.zip` |
+| macOS (Apple Silicon) | [Download for Apple Silicon](https://github.com/turtlesoupy/opensmash-melee/releases) | `OpenSmash-Melee-…-mac-arm64.dmg` |
 
 Run a newer installer to upgrade. Uninstall through Windows Settings > Apps. Upgrades and uninstall retain imported game data, characters, settings and saves in your app profile.
 
