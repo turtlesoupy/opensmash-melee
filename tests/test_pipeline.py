@@ -46,6 +46,23 @@ def mesh_fixture():
                 bind=np.array([np.eye(4),bind]),names=['root','head'],image=Image.new('RGBA',(4,4),(11,22,33,255)))
 
 
+class TextureSlotTests(unittest.TestCase):
+    def test_replacement_retains_texture_slot_ids_and_count(self):
+        from opensmash_melee.gx import material
+        a=fixture();sk=joints(a,'custom_joint');d=sk[0]['dobj'];mesh=mesh_fixture()
+        original=material(a,mesh['image']);first=a.ptr(original+8)
+        extra=material(a,mesh['image']);second=a.ptr(extra+8)
+        a.pack('I',second+8,1);a.pointer(first+4,second);a.pointer(d+8,original)
+        profile={'mesh_joint':0,'joint_map':{'root':0,'head':1}}
+        replace_costume(a,conform(mesh,sk,profile),sk,profile)
+        t=a.ptr(a.ptr(d+8)+8);ids=[]
+        while t is not None:
+            ids.append(a.unpack('I',t+8)[0]);t=a.ptr(t+4)
+        self.assertEqual(ids,[0,1])
+        self.assertEqual(a.ptr(first+4),second)
+        Archive(a.serialize())
+
+
 def decode_vertices(a, first):
     """Independent decode of emitted GX stream and HSD envelope references."""
     triangles, seen, joint_offsets = [],set(),set()

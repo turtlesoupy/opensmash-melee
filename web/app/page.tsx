@@ -11,7 +11,7 @@ import RosterGrid, { FrameRule } from "./RosterGrid";
 import SiteDialog from "./SiteDialog";
 import ImportCharacter from "./ImportCharacter";
 import ManageCharacter from "./ManageCharacter";
-import { loadSettings, type Settings } from "@/lib/launch";
+import { loadSettings, schema, type Settings } from "@/lib/launch";
 import { unlockAudio } from "@/lib/audio";
 import { warmMelee } from "@/lib/melee-session";
 import order from "@/lib/roster-order.json";
@@ -24,14 +24,7 @@ export type Fighter = {
   portrait?: string;
   imported?: boolean;
 };
-export const names: Record<string, string> = {
-  mario: "Mario",
-  luigi: "Luigi",
-  "captain-falcon": "Captain Falcon",
-  fox: "Fox",
-  marth: "Marth",
-  link: "Link",
-};
+export const names: Record<string,string> = Object.fromEntries(schema.targets.map(t=>[t.slug,t.label]));
 const ranks = new Map(order.map((slug, index) => [slug, index]));
 export default function Home() {
   const [gameReady,setGameReady]=useState(false);
@@ -208,6 +201,7 @@ export default function Home() {
         </section>
         <RosterGrid
           fighters={filtered}
+          targetOverride={settings.ports[0].target}
           query={query}
           onQuery={setQuery}
           onChoose={choose}
@@ -264,7 +258,7 @@ export default function Home() {
                 using its original game engine.
               </p>
               <p>
-                {roster.length.toLocaleString()} custom characters with six Melee
+                {roster.length.toLocaleString()} custom characters with 26 Melee
                 fighters. Select a portrait to play, or choose a different launch mode in Settings.
               </p>
               <p>Create a character on smash.fun, then import it here to add it to your roster.</p>

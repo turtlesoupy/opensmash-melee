@@ -269,21 +269,23 @@ def stage_character_select(game, entries, *, cache=None):
 def catalog_identities(root, catalog, costumes):
     from .costume_variant import SCHEMA
     import hashlib
-    if not isinstance(costumes, list) or len(costumes) > 4:
+    if not isinstance(costumes, list) or len(costumes) > 8:
         raise ValueError('Invalid character select lineup')
-    kinds = {'mario': 8, 'luigi': 7, 'captain-falcon': 0, 'fox': 2, 'marth': 9, 'link': 6}
+    from .targets import PLAYABLE, cache_id
+    kinds = {slug:row['fighter'] for slug,row in PLAYABLE.items()}
     entries, seen = [], set()
     for c in costumes:
+        if isinstance(c,dict) and c.get("companion") and c.get("target")=="nana": continue
         if not isinstance(c, dict):
             raise ValueError('Invalid character select entry')
         row = catalog.get(c.get('character'))
         fighter, color = c.get('fighter'), c.get('color')
-        if not row or type(fighter) is not int or fighter != kinds[row['target']]:
+        if not row or type(fighter) is not int or fighter != kinds.get(c.get('target',row['target'])):
             raise ValueError('Unknown injected fighter')
         slots = SCHEMA['costumes'][str(fighter)]
         if type(color) is not int or not 0 <= color < len(slots) or c.get('filename') != slots[color]['filename'] or (fighter, color) in seen:
             raise ValueError('Invalid injected costume slot')
         seen.add((fighter, color))
-        ident = 'web-v1-' + hashlib.sha256(row['slug'].encode()).hexdigest()[:16]
+        ident = cache_id(row['slug'],c.get('target',row['target']),row['target'])
         entries.append((fighter, color, Path(root) / 'assets/characters' / ident))
     return entries

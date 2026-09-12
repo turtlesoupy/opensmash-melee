@@ -8,7 +8,9 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from opensmash_melee.__main__ import ROOT, import_character, dump
 from tools.fit_mario_profile import fit
 from tools.stage_costume import stage
-from opensmash_melee.multi_fighter import TARGETS, load_target, fit as fit_target
+from opensmash_melee.multi_fighter import TARGETS as STABLE_TARGETS, load_target, fit as fit_target
+from opensmash_melee.retarget_probe import TARGETS as ROSTER_TARGETS
+TARGETS = {slug:(code,kind,slug) for slug,code,kind in ROSTER_TARGETS}
 
 
 def main():
@@ -36,6 +38,11 @@ def main():
     mesh=GLB(imported/'rigged.glb').mesh()
     if a.target=='mario':
         profile=fit(imported,costume,a.head_style)
+    elif a.target not in STABLE_TARGETS:
+        from opensmash_melee.roster_fit import profile_for
+        from opensmash_melee.__main__ import digest
+        profile=profile_for(mesh, ROOT/'assets/game/files', a.target)
+        profile.update(costume_sha256=digest(costume),source_glb_sha256=digest(imported/'rigged.glb'),status='requires_gameplay_review')
     else:
         from opensmash_melee.__main__ import digest
         target=load_target(ROOT/'assets/game/files',a.target)
@@ -48,7 +55,7 @@ def main():
     skeleton=joints(Archive.read(costume),profile['symbol'])
     shape=shape_metrics(mesh,conform(mesh,skeleton,profile),profile,skeleton)
     dump(out/'shape.json',shape)
-    if (shape['head_anisotropy']>1.03 or shape['similarity_max_relative_error']>.025
+    if not profile.get('ball_fit') and (shape['head_anisotropy']>1.03 or shape['similarity_max_relative_error']>.025
         or (a.head_style=='source' and shape['head_fraction_relative_error']>.05)):
         p.error('Source-shape check needs manual review; see '+str(out/'shape.json'))
     dump(out/'profile.json',profile)

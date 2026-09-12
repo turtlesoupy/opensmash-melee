@@ -45,3 +45,36 @@ test('an explicitly saved stage overrides the random default',()=>{
  const s={...fresh(),stage:31};
  assert.equal(planLaunch(schema,s,roster[0],roster,()=>0).stage,31);
 });
+
+test('every retarget preserves the selected identity and selects its own costume',()=>{
+ for(const target of schema.targets){
+  const s=fresh();s.ports[0].target=target.slug;
+  const p=planLaunch(schema,s,roster[0],roster,()=>0);
+  assert.equal(p.ports[0].fighter,target.fighter);
+  assert.equal(p.ports[0].character,roster[0].slug);
+  assert.equal(p.costumes[0].target,target.slug);
+  assert.equal(p.costumes[0].filename,schema.costumes[target.fighter][p.ports[0].color].filename);
+ }
+ assert.equal(schema.targets.length,26);
+});
+test('Ice Climbers always prepares Nana in the same costume color',()=>{
+ const s=fresh();s.ports[0].target='popo';const p=planLaunch(schema,s,roster[0],roster,()=>0);
+ const leader=p.costumes.find(c=>c.target==='popo'),partner=p.costumes.find(c=>c.target==='nana');
+ assert(partner.companion);assert.equal(partner.character,leader.character);assert.equal(partner.color,leader.color);
+ assert(partner.filename.startsWith('PlNn'));
+});
+test('unknown retargets fail before preparation',()=>{
+ const s=fresh();s.ports[0].target='../bad';assert.throws(()=>planLaunch(schema,s,roster[0],roster),/valid fighter/);
+});
+test('Zelda and Sheik reserve colors together and prepare both transformations',()=>{
+ const s=fresh();s.ports=[{device:'keyboard',character:'selected',target:'zelda'},{device:'cpu',character:'einstein',target:'sheik'},{device:'cpu',character:'vanilla:18'},{device:'off',character:'vanilla:2'}];
+ const p=planLaunch(schema,s,roster[0],roster);
+ assert.deepEqual(p.ports.map(x=>x.color),[1,2,0,0]);
+ assert.equal(p.costumes.length,4);
+ for(const character of ['alan','einstein']) {
+  const pair=p.costumes.filter(c=>c.character===character);
+  assert.deepEqual(new Set(pair.map(c=>c.target)),new Set(['zelda','sheik']));
+  assert.equal(pair[0].color,pair[1].color);
+  for(const c of pair)assert.equal(c.fighter,schema.targets.find(t=>t.slug===c.target).fighter);
+ }
+});

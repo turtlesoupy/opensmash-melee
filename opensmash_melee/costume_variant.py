@@ -5,8 +5,9 @@ from .archive import Archive
 
 SCHEMA = json.loads((Path(__file__).resolve().parents[1] / 'runtime/launch-options.json').read_text())
 
-def costume_variant(raw, fighter, color):
-    slots = SCHEMA['costumes'][str(fighter)]
+def costume_variant(raw, fighter, color, target=None):
+    from .targets import BY_SLUG
+    slots = BY_SLUG[target]['costumes'] if target else SCHEMA['costumes'][str(fighter)]
     if not isinstance(color, int) or not 0 <= color < len(slots):
         raise ValueError('Invalid costume color')
     archive = Archive(raw)

@@ -1,4 +1,4 @@
-"""Build the six supported target choices for locally cached roster characters."""
+"""Build all target choices for locally cached roster characters."""
 import argparse
 import hashlib
 import json
@@ -8,7 +8,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from opensmash_melee.multi_fighter import TARGETS
+from opensmash_melee.targets import BY_SLUG as TARGETS, cache_id
 
 
 def build(slugs=None):
@@ -19,9 +19,9 @@ def build(slugs=None):
         if not (ROOT / 'build/characters' / base / 'profile.json').exists(): continue
         for target in TARGETS:
             if target == row['target']: continue
-            ident = base + '-target-' + target
+            ident = cache_id(row['slug'],target,row['target'])
             folder = ROOT / 'build/characters' / ident
-            filename = 'Pl' + TARGETS[target][0] + 'Nr.dat'
+            filename = TARGETS[target]['costumes'][0]['filename']
             if not (folder / filename).exists():
                 subprocess.run([sys.executable, str(ROOT / 'tools/build_character.py'),
                     str(ROOT / 'assets/characters' / base), '--id', ident, '--target', target], check=True, cwd=ROOT)

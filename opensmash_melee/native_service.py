@@ -167,31 +167,26 @@ class NativeService:
         if plan["mode"] == 3 and ports[0]["device"] in ["off", "cpu"]:
             raise ValueError("Classic needs a human player 1")
         costumes = plan.get("costumes", [])
-        if not isinstance(costumes, list) or len(costumes) > 4:
+        if not isinstance(costumes, list) or len(costumes) > 8:
             raise ValueError("Invalid costumes")
-        kinds = {
-            "mario": 8,
-            "luigi": 7,
-            "captain-falcon": 0,
-            "fox": 2,
-            "marth": 9,
-            "link": 6,
-        }
+        from .targets import BY_SLUG, cache_id
+        kinds = {slug:row['fighter'] for slug,row in BY_SLUG.items()}
         paths = []
         for c in costumes:
             if not isinstance(c, dict):
                 raise ValueError("Invalid costume")
             row = self.catalog.get(c.get("character"))
-            if not row or c.get("fighter") != kinds.get(row["target"]):
+            target = c.get("target", row["target"] if row else None)
+            if not row or c.get("fighter") != kinds.get(target):
                 raise ValueError("Unknown custom character")
-            slots = self.schema["costumes"][str(c["fighter"])]
+            slots = BY_SLUG[target]["costumes"]
             color = c.get("color")
             if (
                 not integer(color, 0, len(slots) - 1)
                 or c.get("filename") != slots[color]["filename"]
             ):
                 raise ValueError("Invalid costume slot")
-            ident = "web-v1-" + hashlib.sha256(row["slug"].encode()).hexdigest()[:16]
+            ident = cache_id(row["slug"],target,row["target"])
             source = (
                 self.root
                 / "build/characters"

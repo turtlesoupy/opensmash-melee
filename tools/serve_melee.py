@@ -24,8 +24,8 @@ SYS = ROOT / 'build/browser-engine/moderngekko-web/vendor/dolphin/Data/Sys'
 WEB = ROOT / 'runtime/web'
 BUILD = ROOT / 'build/moderngekko-wasm'
 CATALOG = {r['slug']: r for r in json.loads((ROOT / 'web/public/catalog.json').read_text())}
-KINDS = {'mario': (8, 'Mr'), 'luigi': (7, 'Lg'), 'captain-falcon': (0, 'Ca'),
-         'fox': (2, 'Fx'), 'marth': (9, 'Ms'), 'link': (6, 'Lk')}
+from opensmash_melee.targets import PLAYABLE, BY_SLUG, cache_id
+KINDS = {slug:(row['fighter'],row['code']) for slug,row in BY_SLUG.items()}
 LOCK = threading.Lock()
 TRACE_IO = False
 IMPORTS = None
@@ -150,12 +150,14 @@ class Handler(BaseHTTPRequestHandler):
                 slug = route[len('/api/costume/'):]
                 if slug not in CATALOG:
                     raise FileNotFoundError(slug)
-                fighter, code = KINDS[CATALOG[slug]['target']]
-                ident = 'web-v1-' + hashlib.sha256(slug.encode()).hexdigest()[:16]
                 query = parse_qs(urlsplit(self.path).query)
+                target = query.get('target',[CATALOG[slug]['target']])[0]
+                if target not in BY_SLUG: raise ValueError('Unknown moveset')
+                fighter, code = KINDS[target]
+                ident = cache_id(slug,target,CATALOG[slug]['target'])
                 variant = 'browser/' if query.get('skin') == ['host'] else ''
                 color = int(query.get('color', ['0'])[0])
-                slots = SCHEMA['costumes'][str(fighter)]
+                slots = BY_SLUG[target]['costumes']
                 if not 0 <= color < len(slots): raise ValueError('Invalid color')
                 filename = slots[color]['filename']
                 return self.file(descendant(ROOT / 'build/characters', f'{ident}/{variant}{filename}'))
@@ -284,18 +286,21 @@ class Handler(BaseHTTPRequestHandler):
         try: color = int(query.get('color', ['0'])[0])
         except ValueError: return self.send_error(400)
         row = CATALOG[slug]
-        fighter, code = KINDS[row['target']]
-        slots = SCHEMA['costumes'][str(fighter)]
+        target = query.get('target',[row['target']])[0]
+        if target not in BY_SLUG: return self.json({'error':'Unknown moveset'},400)
+        fighter, code = KINDS[target]
+        slots = BY_SLUG[target]['costumes']
         if not 0 <= color < len(slots): return self.send_error(400)
-        ident = 'web-v1-' + hashlib.sha256(slug.encode()).hexdigest()[:16]
+        ident = cache_id(slug,target,row['target'])
         output = ROOT / 'build/characters' / ident
         with LOCK:
             if not (output / f'Pl{code}Nr.dat').is_file():
                 source = CHARACTERS / slug
+                if row.get('imported'): source = ROOT/'assets/characters'/cache_id(slug,row['target'],row['target'])
                 if not (source / 'rigged.glb').is_file():
                     return self.json({'error':'Character source is missing. Reinstall the character library or import the character again.'},422)
                 result = subprocess.run([sys.executable, str(ROOT / 'tools/build_character.py'),
-                                         str(source), '--id', ident, '--target', row['target']],
+                                         str(source), '--id', ident, '--target', target],
                                         cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
                 output.mkdir(parents=True, exist_ok=True)
                 (output / 'build.log').write_text(result.stdout)
@@ -308,7 +313,9 @@ class Handler(BaseHTTPRequestHandler):
         skin_folder = 'browser-compact' if compact else 'browser'
         if host_skin:
             with LOCK:
-                if not (output / skin_folder / f'Pl{code}Nr.dat').is_file():
+                stats_path = output / skin_folder / 'stats.json'
+                stats = json.loads(stats_path.read_text()) if stats_path.is_file() else {}
+                if not (output / skin_folder / f'Pl{code}Nr.dat').is_file() or stats.get('texture_slot_version') != 1:
                     result = subprocess.run([sys.executable, str(ROOT / 'tools/build_browser_skin_costume.py'), ident, *(['--compact'] if compact else [])], cwd=ROOT, capture_output=True, text=True)
                     if result.returncode:
                         (output / 'browser-error.log').write_text(result.stdout + result.stderr)
@@ -332,9 +339,9 @@ class Handler(BaseHTTPRequestHandler):
         if color:
             with LOCK:
                 folder = output / skin_folder if host_skin else output
-                raw = costume_variant((folder / slots[0]['filename']).read_bytes(), fighter, color)
+                raw = costume_variant((folder / slots[0]['filename']).read_bytes(), fighter, color, target)
                 (folder / filename).write_bytes(raw)
-        self.json({'fighter': fighter, 'filename': filename, 'url': f'/api/costume/{slug}?color={color}' + ('&skin=host' if host_skin else '')})
+        self.json({'fighter': fighter, 'filename': filename, 'url': f'/api/costume/{slug}?target={target}&color={color}' + ('&skin=host' if host_skin else '')})
 
     def log_message(self, fmt, *args):
         if self.command == 'POST' or (args and str(args[1]) not in ('200', '206')):

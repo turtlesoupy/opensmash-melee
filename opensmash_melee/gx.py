@@ -211,7 +211,24 @@ def replace_costume(archive, mesh, skeleton, profile):
     else:
         pobj,count = polygons(archive,mesh,skeleton)
     archive.pointer(selected+12,pobj)
-    archive.pointer(selected+8,material(archive,mesh['image']))
+    old_material = archive.ptr(selected+8)
+    old_texture = archive.ptr(old_material+8) if old_material is not None else None
+    replacement = material(archive,mesh['image'])
+    texture = archive.ptr(replacement+8)
+    # Fighter texture-animation tables address textures by traversal index.
+    # Preserve every slot (DK has two on this material) even though only the
+    # first supplies the custom mesh's diffuse color.
+    while old_texture is not None:
+        archive.pack('I',texture+8,archive.unpack('I',old_texture+8)[0])
+        old_texture = archive.ptr(old_texture+4)
+        if old_texture is not None:
+            extra = archive.append(bytes(archive.data[texture:texture+92]))
+            for offset in (0,4,76,80,88):
+                archive.pointer(extra+offset,archive.ptr(texture+offset))
+            archive.pack('I',extra+64,0)
+            archive.pointer(texture+4,extra)
+            texture = extra
+    archive.pointer(selected+8,replacement)
     if profile.get('isolate_body_texture_animation'):
         if owner_index!=0:raise ValueError('Material animation isolation currently requires the root DObj')
         isolate_body_texture_animation(archive,profile['symbol'],dobj_index,archive.ptr(archive.ptr(archive.ptr(selected+8)+8)+76))
@@ -225,6 +242,6 @@ def replace_costume(archive, mesh, skeleton, profile):
             attach(archive,owner['dobj'],mesh["presentation"],portrait,profile.get("stature"))
     # Preserve all skeleton flags; enable normals for the custom model owner.
     archive.pack('I',owner['offset']+4,owner['flags'] | 0x80)
-    return dict(vertices=len(mesh['positions']),triangles=len(mesh['triangles']),
+    return dict(texture_slot_version=1,vertices=len(mesh['positions']),triangles=len(mesh['triangles']),
                 draw_batches=count,unique_envelopes=len(set(mesh['envelopes'])),
                 preserved_joints=len(skeleton),preserved_dobjs=len(visited))

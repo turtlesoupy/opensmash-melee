@@ -60,6 +60,7 @@ export default function RosterGrid({
   onCreate,
   onManage,
   paused,
+  targetOverride,
 }: {
   fighters: Fighter[];
   query: string;
@@ -68,6 +69,7 @@ export default function RosterGrid({
   onCreate: () => void;
   onManage: (f: Fighter) => void;
   paused: boolean;
+  targetOverride?: string;
 }) {
   const [columns, setColumns] = useState(() => (innerWidth >= 800 ? 8 : innerWidth >= 640 ? 6 : 4));
   const rules = useRef<HTMLCanvasElement>(null),
@@ -164,8 +166,8 @@ export default function RosterGrid({
               data-kind="fighter"
               style={cell(i + 2)}
               onClick={() => onChoose(f)}
-              aria-label={`Play as ${f.name}, ${names[f.target]} moveset`}
-              title={`${f.name} · ${names[f.target]}`}
+              aria-label={`Play as ${f.name}, ${names[targetOverride && targetOverride !== 'auto' ? targetOverride : f.target]} moveset`}
+              title={`${f.name} · ${names[targetOverride && targetOverride !== 'auto' ? targetOverride : f.target]}`}
             >
               <img
                 className="replica-portrait-layer"

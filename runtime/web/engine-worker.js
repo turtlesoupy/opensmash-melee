@@ -35,8 +35,8 @@ self.onmessage = async ({data}) => {
         if(index<0 || !engine._opensmash_css_size)throw Error('Update the Melee runtime to use character select injection.');
         const bytes=new Uint8Array(await asset.blob.arrayBuffer());
         if(!bytes.length || bytes.length>16*1024*1024)throw Error('Invalid character select asset.');
-        engine.FS.unlink('/game/files/'+asset.filename);
-        engine.FS.writeFile('/game/files/'+asset.filename,bytes);
+        const reserved=new Uint8Array(16*1024*1024);reserved.set(bytes);
+        engine.FS.writeFile('/game/files/'+asset.filename,reserved);
         engine._opensmash_css_size(index,bytes.length);
       }
       report('session',{build:runtimeBuild,mode:startOptions.benchmark==='1'?'cpu-benchmark':'human',
@@ -140,6 +140,15 @@ self.onmessage = async ({data}) => {
       FS.mkdir('/game');
       if (data.warm) {
         FS.mkdirTree('/game/files');
+        await Promise.all(['MnSlChr.dat','MnSlChr.usd','audio/nr_select.ssm','audio/us/nr_select.ssm'].map(async filename=>{
+          const response=await fetch('/api/game/files/'+filename);
+          if(!response.ok)throw Error('Could not prepare character select.');
+          const bytes=new Uint8Array(await response.arrayBuffer()),reserved=new Uint8Array(16*1024*1024);
+          if(bytes.length>reserved.length)throw Error('Character select asset exceeds reserved slot.');
+          reserved.set(bytes);FS.mkdirTree('/game/files/'+filename.split('/').slice(0,-1).join('/'));
+          FS.writeFile('/game/files/'+filename,reserved);
+          engine._opensmash_css_size(['MnSlChr.dat','MnSlChr.usd','audio/nr_select.ssm','audio/us/nr_select.ssm'].indexOf(filename),bytes.length);
+        }));
         await Promise.all(COSTUME_SLOTS.map(async filename=>{
           const response=await fetch('/api/game/files/'+filename);
           if (!response.ok) throw Error('Could not prepare a fighter slot.');
@@ -152,7 +161,7 @@ self.onmessage = async ({data}) => {
         const slash = name.lastIndexOf('/');
         const parent = '/game/' + name.slice(0, slash);
         FS.mkdirTree(parent);
-        if (data.warm && COSTUME_SLOTS.some(filename=>name===`files/${filename}`)) {
+        if (data.warm && [...COSTUME_SLOTS,'MnSlChr.dat','MnSlChr.usd','audio/nr_select.ssm','audio/us/nr_select.ssm'].some(filename=>name===`files/${filename}`)) {
           continue;
         } else if (data.costume && name === `files/${data.costume.filename}`) {
           FS.writeFile('/game/' + name, new Uint8Array(await data.costume.blob.arrayBuffer()));
@@ -202,7 +211,7 @@ self.onmessage = async ({data}) => {
     mountSystemBundle(FS, await bundleResponse.arrayBuffer());
     engine._opensmash_set_pad(0, 0, 0x80808080, 0, 1);
     report('status', {message: 'Starting match…'});
-    const identityBytes = new TextEncoder().encode(ISO_SHA256 + (data.warm?'warm-slots-v3':data.costume ?
+    const identityBytes = new TextEncoder().encode(ISO_SHA256 + (data.warm?'warm-slots-v8-roster-css':data.costume ?
       Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await data.costume.blob.arrayBuffer())), b => b.toString(16).padStart(2, '0')).join('') : ''));
     const identity = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', identityBytes)), b => b.toString(16).padStart(2, '0')).join('');
     engine.callMain(['/game', data.renderer || 'OGL', '/user', String(data.fighter ?? 8), identity, data.profile || '0',data.benchmark||'0',data.warm?'1':'0']);

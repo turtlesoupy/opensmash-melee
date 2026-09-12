@@ -26,8 +26,8 @@ int opensmash_destination_ready(void) { return destination_ready || original_pac
 #include <stdatomic.h>
 #include <emscripten.h>
 #include <emscripten/threading.h>
-static const char* costume_names[] = {"PlMrNr.dat", "PlMrYe.dat", "PlMrBk.dat", "PlMrBu.dat", "PlMrGr.dat", "PlLgNr.dat", "PlLgWh.dat", "PlLgAq.dat", "PlLgPi.dat", "PlCaNr.dat", "PlCaGy.dat", "PlCaRe.dat", "PlCaWh.dat", "PlCaGr.dat", "PlCaBu.dat", "PlFxNr.dat", "PlFxOr.dat", "PlFxLa.dat", "PlFxGr.dat", "PlMsNr.dat", "PlMsRe.dat", "PlMsGr.dat", "PlMsBk.dat", "PlMsWh.dat", "PlLkNr.dat", "PlLkRe.dat", "PlLkBu.dat", "PlLkBk.dat", "PlLkWh.dat"};
-static unsigned costume_sizes[29], css_sizes[4];
+static const char* costume_names[] = {"PlMrNr.dat", "PlMrYe.dat", "PlMrBk.dat", "PlMrBu.dat", "PlMrGr.dat", "PlFxNr.dat", "PlFxOr.dat", "PlFxLa.dat", "PlFxGr.dat", "PlCaNr.dat", "PlCaGy.dat", "PlCaRe.dat", "PlCaWh.dat", "PlCaGr.dat", "PlCaBu.dat", "PlDkNr.dat", "PlDkBk.dat", "PlDkRe.dat", "PlDkBu.dat", "PlDkGr.dat", "PlKbNr.dat", "PlKbYe.dat", "PlKbBu.dat", "PlKbRe.dat", "PlKbGr.dat", "PlKbWh.dat", "PlKpNr.dat", "PlKpRe.dat", "PlKpBu.dat", "PlKpBk.dat", "PlLkNr.dat", "PlLkRe.dat", "PlLkBu.dat", "PlLkBk.dat", "PlLkWh.dat", "PlSkNr.dat", "PlSkRe.dat", "PlSkBu.dat", "PlSkGr.dat", "PlSkWh.dat", "PlNsNr.dat", "PlNsYe.dat", "PlNsBu.dat", "PlNsGr.dat", "PlPeNr.dat", "PlPeYe.dat", "PlPeWh.dat", "PlPeBu.dat", "PlPeGr.dat", "PlPpNr.dat", "PlPpGr.dat", "PlPpOr.dat", "PlPpRe.dat", "PlNnNr.dat", "PlNnYe.dat", "PlNnAq.dat", "PlNnWh.dat", "PlPkNr.dat", "PlPkRe.dat", "PlPkBu.dat", "PlPkGr.dat", "PlSsNr.dat", "PlSsPi.dat", "PlSsBk.dat", "PlSsGr.dat", "PlSsLa.dat", "PlYsNr.dat", "PlYsRe.dat", "PlYsBu.dat", "PlYsYe.dat", "PlYsPi.dat", "PlYsAq.dat", "PlPrNr.dat", "PlPrRe.dat", "PlPrBu.dat", "PlPrGr.dat", "PlPrYe.dat", "PlMtNr.dat", "PlMtRe.dat", "PlMtBu.dat", "PlMtGr.dat", "PlLgNr.dat", "PlLgWh.dat", "PlLgAq.dat", "PlLgPi.dat", "PlMsNr.dat", "PlMsRe.dat", "PlMsGr.dat", "PlMsBk.dat", "PlMsWh.dat", "PlZdNr.dat", "PlZdRe.dat", "PlZdBu.dat", "PlZdGr.dat", "PlZdWh.dat", "PlClNr.dat", "PlClRe.dat", "PlClBu.dat", "PlClWh.dat", "PlClBk.dat", "PlDrNr.dat", "PlDrRe.dat", "PlDrBu.dat", "PlDrGr.dat", "PlDrBk.dat", "PlFcNr.dat", "PlFcRe.dat", "PlFcBu.dat", "PlFcGr.dat", "PlPcNr.dat", "PlPcRe.dat", "PlPcBu.dat", "PlPcGr.dat", "PlGwNr.dat", "PlGnNr.dat", "PlGnRe.dat", "PlGnBu.dat", "PlGnGr.dat", "PlGnLa.dat", "PlFeNr.dat", "PlFeRe.dat", "PlFeBu.dat", "PlFeGr.dat", "PlFeYe.dat"};
+static unsigned costume_sizes[sizeof(costume_names)/sizeof(costume_names[0])], css_sizes[4];
 static const char* css_names[]={"MnSlChr.dat","MnSlChr.usd","nr_select.ssm","nr_select.ssm"};
 EMSCRIPTEN_KEEPALIVE void opensmash_css_size(unsigned slot,unsigned size) {
     if(slot>=4 || !size || size>16777216)abort();css_sizes[slot]=size;
@@ -57,6 +57,7 @@ EMSCRIPTEN_KEEPALIVE void opensmash_configure_launch(int mode,int stage,int leve
 }
 #endif
 
+static unsigned sheik_pending;
 static int requested = 0, prepared = 0, classic_prepared = 0, launched = 0, css_frames = 0;
 static int boot_card_seen = 0, boot_card_active = 0;
 
@@ -189,7 +190,11 @@ static void vs_on_load(CPUState* s) {
         write8(s, player + 4, i);
         write8(s, player + 1, i < 4 ? ((port_config[i]>>8)&255) : 3);
         if (i < 4) {
-            write8(s, player, port_config[i]&255);
+            unsigned choice=port_config[i]&255;
+            /* CSS has a Zelda tile, but no Sheik tile. An unrecognized 19
+             * becomes CKIND_PLAYABLE_COUNT (Master Hand) or disables CPUs. */
+            write8(s, player, choice==19?18:choice);
+            if(choice==19 && ((port_config[i]>>8)&255)!=3)sheik_pending|=1u<<i;
             write8(s, player + 3, port_config[i]>>16);
             write8(s, player + 0xF, cpu_level);
         }
@@ -209,8 +214,18 @@ static void classic_enter(CPUState* s) {
     classic_prepared=1;
     unsigned prefs=read32(s,0x804D3EE0);
     moderngekko_mod_write(s,prefs+0x1868,0x7FF,2);
-    write8(s,prefs+0x51C,port_config[0]&255);write8(s,prefs+0x51D,stocks);
+    unsigned choice=port_config[0]&255;
+    write8(s,prefs+0x51C,choice==19?18:choice);if(choice==19)sheik_pending|=1;write8(s,prefs+0x51D,stocks);
     write8(s,prefs+0x51E,port_config[0]>>16);write8(s,prefs+0x51F,(cpu_level-1)/2);
+}
+static void initialize_requested_form(CPUState* s) {
+    unsigned port=s->gpr[3],player=s->gpr[4];
+    if(port>=4 || !(sheik_pending&(1u<<port)))return;
+    sheik_pending&=~(1u<<port);
+    if(moderngekko_mod_read(s,player,1)==18 && moderngekko_mod_read(s,player+3,1)==(port_config[port]>>16)) {
+        write8(s,player,19);
+        fprintf(stderr,"[opensmash] starting Sheik port=%u\n",port);
+    }
 }
 static void report_assert(CPUState* s) {
     char file[161] = {0}, message[241] = {0};
@@ -600,6 +615,7 @@ static const ModernGekkoModHook hooks[] = {
     RECOMP_HOOK(0x801B3DD8, classic_enter),
     RECOMP_HOOK(0x8016D800, combat_frame),
     RECOMP_HOOK(0x802669F4, css_frame),
+    RECOMP_HOOK(0x8016D8AC, initialize_requested_form),
     RECOMP_HOOK(0x8025A998, stage_enter),
     RECOMP_HOOK(0x80388220, report_assert),
     RECOMP_HOOK(0x80388278, report_assert),

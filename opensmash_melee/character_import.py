@@ -9,7 +9,8 @@ from .__main__ import atomic_write
 from .glb import GLB
 ROOT=Path(__file__).resolve().parents[1]
 FILES={'rigged.glb':64<<20,'portrait_raw.png':16<<20,'stock_raw.png':8<<20,'emblem_raw.png':8<<20,'announcer.wav':16<<20}
-TARGETS={'mario','luigi','captain-falcon','fox','marth','link'}
+from .targets import PLAYABLE
+TARGETS=set(PLAYABLE)
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self,*args,**kwargs):raise ValueError('Import links must point directly to the source export.')
 

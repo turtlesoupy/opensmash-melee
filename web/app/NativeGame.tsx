@@ -102,7 +102,7 @@ export default function NativeGame({
           await request(
             "/api/prepare/" +
               encodeURIComponent(c.character) +
-              "?color=" +
+              "?target=" + encodeURIComponent(c.target) + "&color=" +
               c.color +
               "&skin=host" +
               (launch.costumes.length >= 3 ? "&compact=1" : ""),
