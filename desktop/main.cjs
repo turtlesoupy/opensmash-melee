@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell, session } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell, session, screen } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomBytes } = require("node:crypto");
 const fs = require("node:fs"),
@@ -7,6 +7,7 @@ let window,
   backend,
   surface,
   origin,
+  saveWindowState,
   quitting = false;
 const token = randomBytes(32).toString("hex");
 const resources = app.isPackaged ? process.resourcesPath : path.resolve(__dirname, "../build");
@@ -90,9 +91,11 @@ else
       session.defaultSession.setPermissionRequestHandler((_web, _permission, callback) =>
         callback(false),
       );
+      const placement = require("./window-state.cjs")(
+        path.join(app.getPath("userData"), "window-state.json"), screen,
+      );
       window = new BrowserWindow({
-        width: 1040,
-        height: 820,
+        ...placement.bounds,
         minWidth: 680,
         minHeight: 600,
         title: "OpenSmash Melee",
@@ -105,6 +108,7 @@ else
           nodeIntegration: false,
         },
       });
+      saveWindowState = placement.track(window);
       surface?.attach(window);
       const lifecycle = require("./game-lifecycle.cjs")(async (route, body) => {
         const response = await fetch(origin + route, {
@@ -225,6 +229,7 @@ else
         return result;
       });
       await window.loadURL(origin);
+      if (placement.maximized) window.maximize();
       window.show();
     } catch (e) {
       dialog.showErrorBox("OpenSmash Melee could not start", e.message);
@@ -240,6 +245,7 @@ app.on("before-quit", (event) => {
   if (quitting) return;
   event.preventDefault();
   quitting = true;
+  saveWindowState?.();
   const stop = origin
     ? fetch(origin + "/api/native/shutdown", {
         method: "POST",

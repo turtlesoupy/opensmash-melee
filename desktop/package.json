@@ -33,6 +33,7 @@
       "surface.cjs",
       "frame.cjs",
       "game-lifecycle.cjs",
+      "window-state.cjs",
       "native/build/Release/surface.node"
     ],
     "extraResources": [
