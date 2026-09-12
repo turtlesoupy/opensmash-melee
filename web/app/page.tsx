@@ -181,10 +181,10 @@ export default function Home() {
         </header>
         <section
           className="intro-video-stage"
-          style={!selected && gameReady ? {display:"none"} : undefined}
-          aria-label={selected ? "Melee game" : "Smash.fun introduction"}
+          style={!desktop() && !selected && gameReady ? {display:"none"} : undefined}
+          aria-label={selected ? "Melee game" : gameReady ? "Select a character" : "Game setup"}
         >
-          <div ref={frame} className={`intro-video-frame ${selected ? "is-game-running" : ""}`}>
+          <div ref={frame} className={`intro-video-frame ${desktop() ? "is-native-screen" : ""} ${selected ? "is-game-running" : ""}`}>
             {selected ? (
               <Player
                 key={selected.id}
@@ -194,7 +194,7 @@ export default function Home() {
                 onClose={() => setSelected(null)}
               />
             ) : (
-              <BootScreen onReady={setGameReady}/>
+              <BootScreen onReady={setGameReady} showReadyPrompt={!!desktop()}/>
             )}
             <FrameRule />
           </div>

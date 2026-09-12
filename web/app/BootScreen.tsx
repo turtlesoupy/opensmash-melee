@@ -2,7 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import {desktop} from '@/lib/desktop';
 import {subscribeLocalDisc,selectLocalDisc,usesLocalDisc} from '@/lib/melee-session';
 type Setup={state:string;ready:boolean;message:string;progress?:number};
-export default function BootScreen({onReady}:{onReady:(ready:boolean)=>void}) {
+export default function BootScreen({onReady,showReadyPrompt=false}:{onReady:(ready:boolean)=>void;showReadyPrompt?:boolean}) {
  const [setup,setSetup]=useState<Setup>({state:'checking',ready:false,message:'Checking local game setup…'});
  const [error,setError]=useState(''),[connectionError,setConnectionError]=useState(''),[transfer,setTransfer]=useState<number|null>(null);
  const input=useRef<HTMLInputElement>(null),request=useRef<XMLHttpRequest|null>(null),ready=useRef(onReady);ready.current=onReady;
@@ -42,9 +42,13 @@ export default function BootScreen({onReady}:{onReady:(ready:boolean)=>void}) {
   xhr.send(file);
  }
  const busy=transfer!==null||['receiving','installing','checking'].includes(setup.state);
+ if(showReadyPrompt&&setup.ready&&!busy&&!error&&!connectionError)return <section className="native-ready" aria-label="Ready to play">
+  <div role="status"><h2>Select a character to start</h2><p>Choose a fighter from the roster below.</p></div>
+ </section>;
+ const StatusHeading=showReadyPrompt?'h2':'p';
  return <section className="boot-screen launch-settings" aria-label="Game disc">
   <div className="boot-disc">
-   <p role="status">{transfer!==null?`Copying and checking disc… ${Math.round(transfer*100)}%`:setup.state==='failed'||setup.state==='error'?setup.message:setup.ready?'Ready to play.':busy?setup.message: 'Choose your Melee disc to get started.'}</p>
+   <StatusHeading role="status">{transfer!==null?`Copying and checking disc… ${Math.round(transfer*100)}%`:setup.state==='failed'||setup.state==='error'?setup.message:setup.ready?'Ready to play.':busy?setup.message: 'Choose your Melee disc to get started.'}</StatusHeading>
    {busy&&<progress aria-label="Disc setup progress" {...(transfer!==null?{value:transfer,max:1}:{})}/>}
    {(error||connectionError)&&<p role="alert">{error||connectionError}</p>}
    <input ref={input} type="file" accept=".iso,.gcm" aria-label="Choose Melee ISO or GCM" hidden onChange={e=>{select(e.target.files?.[0]);e.target.value='';}}/>
