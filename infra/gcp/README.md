@@ -137,8 +137,8 @@ The local release command builds `OpenSmash-Melee-VERSION-win-x64-Setup.exe`.
 NSIS installs per-user with desktop and Start menu
 shortcuts and uninstall support. Elevation and app-data deletion are disabled.
 User data stays in the existing Electron profile outside the install directory.
-Never choose the app-data profile as the installation destination. macOS ZIP and
-Linux archive targets are unchanged. Manifests, cloud workers and manual CI
+Never choose the app-data profile as the installation destination. Linux archive
+packaging is unchanged; macOS DMG packaging is described below. Manifests, cloud workers and manual CI
 collect the installer executable.
 
 Before publishing, test clean installation, installed launcher startup and
