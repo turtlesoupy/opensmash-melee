@@ -2,18 +2,16 @@
 
 Super Smash Bros. Melee with custom fighters, from the same team that built [OpenSmash](https://github.com/turtlesoupy/opensmash). Pick a character from the roster or bring one over from [smash.fun](https://smash.fun), and play with a familiar Melee moveset.
 
-**This is an alpha build.** Expect bugs, unfinished features, and performance issues. Some characters may look or move strangely, and larger matches can slow down.
+**This is an alpha build.** Expect bugs, unfinished features, and performance issues.
 
 ## Download
 
-Choose your platform, then download the matching file from the release's **Assets** section. Run the Windows `-Setup.exe` installer, then open OpenSmash Melee from the Start menu or desktop shortcut. Installation is for your account and requires no administrator access. Older releases may offer a ZIP instead: extract it before opening the app. On macOS, open the DMG and drag OpenSmash Melee into Applications, then open it from Applications and eject the disk image.
+Choose your platform, then download the matching file from the release's **Assets** section. 
 
 | Platform | Releases | File to choose |
 | --- | --- | --- |
-| Windows (64-bit) | [Download for Windows](https://github.com/turtlesoupy/opensmash-melee/releases) | `OpenSmash-Melee-…-win-x64-Setup.exe` (older releases: `.zip`) |
+| Windows (64-bit) | [Download for Windows](https://github.com/turtlesoupy/opensmash-melee/releases) | `OpenSmash-Melee-…-win-x64-Setup.exe` |
 | macOS (Apple Silicon) | [Download for Apple Silicon](https://github.com/turtlesoupy/opensmash-melee/releases) | `OpenSmash-Melee-…-mac-arm64.dmg` |
-
-Run a newer installer to upgrade. Uninstall through Windows Settings > Apps. Upgrades and uninstall retain imported game data, characters, settings and saves in your app profile.
 
 Check the release notes for platform requirements and known issues.
 
@@ -25,27 +23,20 @@ You'll need your own **unmodified Super Smash Bros. Melee USA 1.02 disc image** 
 2. Wait for setup to finish, then pick a fighter from the roster.
 3. Pick a fighter to face a random Melee fighter and two random custom characters. Open **Settings** to choose your opponents, stage, match rules, and controllers. Open **Controls** to see the button mappings light up as you press them, and to rebind keys or gamepad buttons.
 
-Custom fighters use the moves of Mario, Luigi, Captain Falcon, Fox, Marth, or Link. You can jump into a match or use Settings to start from Melee's menus.
-
 ## Bring your own character
 
 Create a character on [smash.fun](https://smash.fun). In its download panel, choose **Copy Melee import URL**. Open **Create** in OpenSmash Melee, paste the link, and choose a Melee moveset. Your character appears in the roster when the import finishes.
 
 ## How it works
 
-A short tour for the curious. None of this is required to play.
-
 **The game runs as recompiled code, not in an emulator.** At setup, the `main.dol` executable from your disc image is run through a PowerPC static recompiler that turns the game's machine code into a native module (or WebAssembly for the browser build). Around that module sits a host layer that stands in for the rest of the GameCube: a GX-to-OpenGL/WebGL renderer, DSP audio, controller input, and a virtual disc that serves files from the extracted image. That host layer is built from Dolphin's own video, audio, and hardware subsystems, trimmed down and embedded as a library, with Dolphin's PowerPC interpreter swapped out for the recompiled code. So this is not a source port in the style of the Zelda and Mario decomp ports. It is closer to the N64 recompilation projects: the original game binary, translated ahead of time, running inside a slimmed emulator core. We also use full Dolphin during development to record parity captures and check that our output matches frame for frame.
 
 **Your disc is never modified.** Setup verifies that the image is an unmodified USA 1.02 copy, extracts its filesystem into a local folder, and hashes every file. Custom fighters are swapped into that folder as costume files, padded to fixed sizes so the file table stays stable, and small runtime mods hook into the game to route scenes and drive the expanded character select screen.
 
-**Custom fighters are costumes on Melee skeletons.** An import fetches the rigged model and art from smash.fun, conforms the mesh onto the chosen fighter's skeleton using the game's own bind matrices, repairs hands and feet, bakes textures into a single atlas, and writes a genuine DAT costume file. Physics, hitboxes, and animations are untouched Melee data, so each custom fighter borrows a Melee moveset. The shared launcher offers all 26 movesets in More → Settings → Players & Controllers; alternate costumes are generated locally on first use and cached. Kirby and Jigglypuff use the big-head fit; Ice Climbers prepares both partners, and Zelda/Sheik keeps the custom character through transformations. The bundled roster uses all 26 default movesets, assigned by stable moveset-family heuristics and thematic overrides in `tools/assign_roster_targets.py`; player overrides remain available. Original assignments are retained only for costume cache compatibility. Game & Watch shares one costume file across colors, so its players must use the same custom character.
-
-**Making it fast took some surgery.** Off the shelf, the recompiled game ran at around 33 FPS with a few hundred GPU draw batches per character, so skinning was rewritten to run in one batch on the GPU and validated live against the original matrix routines. Startup dropped from nearly half a minute to about four seconds with a bulk file manifest and a pre-booted engine that waits in the background. On macOS and Windows the desktop app now defaults to a JIT backend, since the static path lost frames after a few seconds of four-player play while the JIT held steady at 60. Several rendering bugs, including double-dimmed lighting and menus that went blank because WebGL lacks depth clamping, needed fixes in the renderer.
+**Custom fighters are costumes on Melee skeletons.** An import fetches the rigged model and art from smash.fun, conforms the mesh onto the chosen fighter's skeleton using the game's own bind matrices, repairs hands and feet, bakes textures into a single atlas, and writes a genuine DAT costume file. Physics, hitboxes, and animations are untouched Melee data, so each custom fighter borrows a Melee moveset. The shared launcher offers all 26 movesets in More → Settings → Players & Controllers; alternate costumes are generated locally on first use and cached. Kirby and Jigglypuff use the big-head fit; Ice Climbers prepares both partners, and Zelda/Sheik keeps the custom character through transformations. The bundled roster uses all 26 default movesets, assigned by stable moveset-family heuristics and thematic overrides in `tools/assign_roster_targets.py`; player overrides remain available. Original assignments are retained only for costume cache compatibility. 
 
 **The desktop app is a shell around the native engine.** Electron hosts the same launcher UI as the web build and a bundled Python service handles setup and imports. The engine renders natively and its frames are shared into the window through IOSurface on macOS or shared memory elsewhere.
 
-The [doldecomp/melee](https://github.com/doldecomp/melee) project was essential even though it isn't the runtime: it provides the disc extraction tooling, the file format knowledge, and the addresses our mods hook into.
 
 ## Feedback
 
