@@ -1,6 +1,7 @@
 """Cross-build the pinned, patched ModernGekko runtime with Emscripten."""
 import argparse
 import hashlib
+import gzip
 import json
 import os
 from pathlib import Path
@@ -8,25 +9,45 @@ import shutil
 import subprocess
 
 from prepare_moderngekko import CHECKOUT, ROOT
-from specialize_browser_math import specialize, specialize_scaled
+from specialize_browser_math import specialize, specialize_scaled, containing_chunk
 
 SOURCE = ROOT / 'build/browser-engine/moderngekko-web'
 BUILD = ROOT / 'build/moderngekko-wasm'
 EMSDK = Path(os.environ.get('MELEE_EMSDK', ROOT.parent / 'opensmash/emsdk')).expanduser().resolve()
 
 
-def write_build_identity(dev_link=False):
-    wasm = BUILD / 'opensmash-web.wasm'
+def write_build_identity(dev_link=False, chunk_instructions=256, hot_lto=False, output=None):
+    output = output or BUILD
+    wasm = output / 'opensmash-web.wasm'
     with wasm.open('rb') as stream:
         digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-    (BUILD / 'opensmash-web-build.json').write_text(json.dumps({
+    runtime_digest = hashlib.sha256(bytes.fromhex(digest))
+    for source in sorted(output.glob('opensmash-web*.js')):
+        runtime_digest.update(source.name.encode())
+        runtime_digest.update(source.read_bytes())
+    (output / 'opensmash-web-build.json').write_text(json.dumps({
         'id': digest[:16], 'wasmSha256': digest, 'wasmBytes': wasm.stat().st_size,
+        'cacheId': runtime_digest.hexdigest()[:24],
+        'chunkInstructions': chunk_instructions, 'hotLto': hot_lto,
         'linkOptimization': 'O1' if dev_link else 'O3',
         'patchSha256': hashlib.sha256((ROOT / 'runtime/patches/browser/0001-emscripten-runtime.patch').read_bytes()).hexdigest(),
     }, indent=2) + '\n')
+    # Serve a compact transfer while preserving the exact compiled bytes and
+    # build identity. Do this at build time, never during a user's first launch.
+    for source in output.glob('opensmash-web*'):
+        if source.suffix not in ('.wasm', '.js'):
+            continue
+        temporary = source.with_name(source.name + '.gz.tmp')
+        with source.open('rb') as src, temporary.open('wb') as dest:
+            with gzip.GzipFile(filename='', mode='wb', fileobj=dest, compresslevel=6, mtime=0) as packed:
+                shutil.copyfileobj(src, packed)
+        temporary.replace(source.with_name(source.name + '.gz'))
 
 
-def build(configure_only=False, target='opensmash-web', dev_link=False):
+def build(configure_only=False, target='opensmash-web', dev_link=False, chunk_instructions=256, hot_lto=False):
+    global BUILD
+    BUILD = ROOT / ('build/moderngekko-wasm' + (f'-{chunk_instructions}' if chunk_instructions != 256 else ''))
+    output = BUILD.with_name(BUILD.name + '-hot') if hot_lto else BUILD
     original = CHECKOUT / 'ref/ModernGekko'
     if not SOURCE.exists():
         if not (original / 'vendor/dolphin/Source/Core/Core/PowerPC/StaticRecomp').is_dir():
@@ -56,26 +77,38 @@ def build(configure_only=False, target='opensmash-web', dev_link=False):
                    CMAKE_C_FLAGS='-pthread', CMAKE_CXX_FLAGS='-pthread')
     # Smaller recompiler regions avoid LLVM's pathological irreducible-CFG pass
     # on a 4096-instruction native chunk. This changes host code partitioning only.
-    generated = ROOT / 'build/browser-engine/melee-wasm-code/generated'
+    generated = ROOT / ('build/browser-engine/melee-wasm-code' + (f'-{chunk_instructions}' if chunk_instructions != 256 else '')) / 'generated'
     if not (generated / 'generated.h').exists():
-        game_env = env | {'DOLRECOMP_C_CHUNK_INSTRUCTIONS': '256'}
+        game_env = env | {'DOLRECOMP_C_CHUNK_INSTRUCTIONS': str(chunk_instructions)}
         subprocess.run([str(original / 'build-desktop-tools-meleepad/dolrecomp'),
                         '--gamecube', '--cpu', 'gekko', '-j8',
                         str(ROOT / 'assets/game/sys/main.dol'), str(generated.parent)],
                        env=game_env, check=True)
     shutil.copy2(ROOT / 'assets/game/sys/main.dol', generated / 'main.dol')
-    specialize()
-    specialize_scaled()
+    specialize(generated)
+    specialize_scaled(generated)
+    hot_addresses = [0x80341140, 0x80342204, 0x80379A20, 0x8037A54C]
+    if hot_lto:
+        # Four-player Chrome profile b81810e5f9fc8124, September 12. Keep
+        # constant PPC register operands visible to the exact math helpers.
+        hot_addresses += [0x80326140, 0x80326540, 0x8036E540, 0x80362140,
+                          0x8033ED40, 0x80361D40, 0x8037A140, 0x80361940,
+                          0x8033FD40, 0x8036AD40, 0x80362540, 0x80361540,
+                          0x8033E940, 0x80340140, 0x80385140, 0x80374140,
+                          0x80360940, 0x8035C940, 0x8036C140, 0x8035E140,
+                          0x8033C140, 0x8033F140, 0x80363940, 0x800BF140]
     options.update(OPENSMASH_WASM_LINK_OPT='-O1' if dev_link else '-O3',
                    OPENSMASH_BROWSER_FRONTEND=str(ROOT / 'runtime/web'),
-                   OPENSMASH_RECOMPILED_GAME=str(generated))
+                   OPENSMASH_WEB_OUTPUT_DIRECTORY=str(output),
+                   OPENSMASH_RECOMPILED_GAME=str(generated),
+                   OPENSMASH_HOT_GAME_CHUNKS=';'.join(str(containing_chunk(generated, address)) for address in hot_addresses))
     subprocess.run([str(EMSDK / 'upstream/emscripten/emcmake'), 'cmake', '-S', str(SOURCE),
                     '-B', str(BUILD), '-G', 'Ninja',
                     *[f'-D{key}={value}' for key, value in options.items()]], env=env, check=True)
     if not configure_only:
         subprocess.run(['cmake', '--build', str(BUILD), '--target', target, '-j8'], env=env, check=True)
         if target == 'opensmash-web':
-            write_build_identity(dev_link)
+            write_build_identity(dev_link, chunk_instructions, hot_lto, output)
 
 
 if __name__ == '__main__':
@@ -83,5 +116,7 @@ if __name__ == '__main__':
     parser.add_argument('--configure-only', action='store_true')
     parser.add_argument('--target', default='opensmash-web')
     parser.add_argument('--dev-link', action='store_true', help='Fast development link; use default optimized build for FPS validation')
+    parser.add_argument('--chunk-instructions', type=int, choices=(128, 256, 512, 1024), default=256, help='Build an isolated region-size experiment; 256 remains the default')
+    parser.add_argument('--hot-lto', action='store_true', help='Experiment with profiled helper inlining; publish to a separate -hot directory')
     args = parser.parse_args()
-    build(args.configure_only, args.target, args.dev_link)
+    build(args.configure_only, args.target, args.dev_link, args.chunk_instructions, args.hot_lto)

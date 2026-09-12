@@ -87,7 +87,8 @@ self.onmessage = async ({data}) => {
     const {inspectDisc, ISO_SHA256} = await import('./disc.mjs');
     const {mountSizedFile, mountSystemBundle, costumeSlot, COSTUME_SLOTS} = await import('./local-files.mjs');
     report('status', {message: 'Loading Melee…'});
-    importScripts('./opensmash-web.js');
+    const runtimeUrl=path=>new URL(path+'?v='+(build.cacheId||build.id),self.location.href).href;
+    importScripts(runtimeUrl('./opensmash-web.js'));
     phase = 'loading WebAssembly and threads';
     engine = await createMelee({
       canvas: new OffscreenCanvas(960, 720),
@@ -104,8 +105,8 @@ self.onmessage = async ({data}) => {
             clickToMatchMs:Number.isFinite(selected.requestedAt)?Date.now()-selected.requestedAt:null});
         }
       },
-      mainScriptUrlOrBlob: new URL('./opensmash-web.js', self.location.href).href,
-      locateFile: path => new URL(path, self.location.href).href,
+      mainScriptUrlOrBlob: runtimeUrl('./opensmash-web.js'),
+      locateFile: runtimeUrl,
       print: text => report('log', {text}),
       printErr: text => {
         report('log', {text});
@@ -173,9 +174,12 @@ self.onmessage = async ({data}) => {
     FS.mkdir('/disc');
     FS.mount(WORKERFS, {blobs: [{name: 'game.iso', data: data.iso}]}, '/disc');
     report('status', {message: 'Checking your game…'});
-    const hash = engine.ccall('opensmash_hash_file', 'string', ['string'], ['/disc/game.iso']);
-    if (hash !== ISO_SHA256) throw Error('This image does not match the known USA 1.02 Melee disc hash.');
+    if(!data.discVerified){
+      const hash = engine.ccall('opensmash_hash_file', 'string', ['string'], ['/disc/game.iso']);
+      if (hash !== ISO_SHA256) throw Error('This image does not match the known USA 1.02 Melee disc hash.');
+    }
     const {blobs} = await inspectDisc(data.iso);
+    report('disc-verified',{});
     if (data.costume) {
       if (!/^Pl[A-Za-z0-9]+\.dat$/.test(data.costume.filename)) throw Error('Invalid costume filename.');
       const entry = blobs.find(entry => entry.name === `files/${data.costume.filename}`);
@@ -183,7 +187,22 @@ self.onmessage = async ({data}) => {
       entry.data = data.costume.blob;
     }
     FS.mkdir('/game');
-    FS.mount(WORKERFS, {blobs}, '/game');
+    // WORKERFS is read-only. Mount the immutable disc separately, and expose
+    // ordinary files through symlinks while reserving writable injection slots.
+    FS.mkdir('/disc-files');FS.mount(WORKERFS, {blobs}, '/disc-files');
+    const cssNames=['MnSlChr.dat','MnSlChr.usd','audio/nr_select.ssm','audio/us/nr_select.ssm'];
+    for(const {name,data:blob} of blobs){
+      FS.mkdirTree('/game/'+name.slice(0,name.lastIndexOf('/')));
+      const filename=name.slice(6),cssIndex=cssNames.indexOf(filename);
+      if(data.warm&&name.startsWith('files/')&&(COSTUME_SLOTS.includes(filename)||cssIndex>=0)){
+        const bytes=new Uint8Array(await blob.arrayBuffer());
+        const reserved=cssIndex>=0?new Uint8Array(16*1024*1024):costumeSlot(bytes);
+        if(bytes.length>reserved.length)throw Error('Disc asset exceeds reserved slot.');
+        reserved.set(bytes);FS.writeFile('/game/'+name,reserved);
+        if(cssIndex>=0)engine._opensmash_css_size(cssIndex,bytes.length);
+        else costumeSizes.set(filename,bytes.length);
+      }else FS.symlink('/disc-files/'+name,'/game/'+name);
+    }
     }
     FS.mkdir('/user');
     FS.mount(engine.IDBFS, {autoPersist:true}, '/user');
@@ -298,7 +317,7 @@ self.onmessage = async ({data}) => {
             combatFrames,durationMs,fps,p95,p99,over33ms:combatSamples.filter(n=>n>33.34).length,
             audioPeak,audioUnderrunSamples:underruns-combatUnderruns,
             audioRenderedSamples:renderedAudioSamples-combatAudioSamples,
-            targetFps:60,passes:fps>=58.5&&p95<=20&&p99<=33.34});
+            targetFps:60,passes:combatProfile==='0'&&fps>=58.5&&p95<=20&&p99<=33.34&&underruns===combatUnderruns&&renderedAudioSamples-combatAudioSamples>=durationMs*48*.95});
           combatSamples=[];combatStart=now;combatFirstFrame=count;combatUnderruns=underruns;combatAudioSamples=renderedAudioSamples;
         }
       }

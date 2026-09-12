@@ -38,13 +38,17 @@ target_compile_definitions(opensmash-game PRIVATE MODULE_GAME_ID="GALE01")
 target_compile_options(opensmash-game PRIVATE -O2 -ffp-contract=off -fno-fast-math)
 # Link-time optimization lets hot matrix calls inline the exact PPC helpers.
 # Keep the rest of the 3,792 game regions as objects to bound link memory/time.
+if(NOT OPENSMASH_HOT_GAME_CHUNKS)
+  set(OPENSMASH_HOT_GAME_CHUNKS
+    "${OPENSMASH_RECOMPILED_GAME}/chunks/chunk_3320_text1_80341140.c"
+    "${OPENSMASH_RECOMPILED_GAME}/chunks/chunk_3324_text1_80342140.c"
+    "${OPENSMASH_RECOMPILED_GAME}/chunks/chunk_3546_text1_80379940.c"
+    "${OPENSMASH_RECOMPILED_GAME}/chunks/chunk_3549_text1_8037A540.c")
+endif()
 set_source_files_properties(
   "${OPENSMASH_DOLPHIN}/GXRuntime/src/core/cpu.c"
   "${OPENSMASH_DOLPHIN}/GXRuntime/src/core/cpu_interpreter_float.c"
-  "${OPENSMASH_RECOMPILED_GAME}/chunks/chunk_3320_text1_80341140.c"
-  "${OPENSMASH_RECOMPILED_GAME}/chunks/chunk_3324_text1_80342140.c"
-  "${OPENSMASH_RECOMPILED_GAME}/chunks/chunk_3546_text1_80379940.c"
-  "${OPENSMASH_RECOMPILED_GAME}/chunks/chunk_3549_text1_8037A540.c"
+  ${OPENSMASH_HOT_GAME_CHUNKS}
   PROPERTIES COMPILE_OPTIONS "-flto")
 # Inline the hot dispatcher and CPU-state/memory helpers across their C++ files.
 set_source_files_properties(
@@ -59,6 +63,9 @@ add_executable(opensmash-web "${OPENSMASH_WEB_SOURCE}/main.cpp" "${OPENSMASH_WEB
 target_link_libraries(opensmash-web PRIVATE moderngekko opensmash-game mbedcrypto fmt::fmt)
 target_include_directories(opensmash-web PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include" "${OPENSMASH_DOLPHIN}/Source/Core")
 set_target_properties(opensmash-web PROPERTIES SUFFIX ".js")
+if(OPENSMASH_WEB_OUTPUT_DIRECTORY)
+  set_target_properties(opensmash-web PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${OPENSMASH_WEB_OUTPUT_DIRECTORY}")
+endif()
 set(OPENSMASH_WASM_LINK_OPT "-O1" CACHE STRING "Wasm optimization for development links")
 target_link_options(opensmash-web PRIVATE
   ${OPENSMASH_WASM_LINK_OPT}

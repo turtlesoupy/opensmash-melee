@@ -21,7 +21,7 @@ const {execFileSync}=require('node:child_process');
  try {
   for(const name of ['first-visit','repeat-visit']) {
    const entered=Date.now();
-   await page.goto('http://127.0.0.1:5174/',{waitUntil:'domcontentloaded'});
+   await page.goto('http://127.0.0.1:5174/?disc=server',{waitUntil:'domcontentloaded'});
    if(process.env.OPENSMASH_FOCUS_TEST_WINDOW==='1') {
     const cdp=await context.browser().newBrowserCDPSession();
     const info=await cdp.send('SystemInfo.getProcessInfo');await cdp.detach();

@@ -265,3 +265,54 @@ traces and summarized windows: `build/browser-runtime-profile/lookup-validation/
 This validates this two-player matchup on this machine, not every roster/stage,
 four-player performance, or a perceptual audio certification. Only browser
 profile storage was cold; server assets and driver caches were not reset.
+
+
+## Browser local ISO and native performance comparison (September 12)
+
+The browser now reads a user-selected ISO locally, with no `/api/setup` or
+`/api/game` transport. A fresh Chrome profile on the Apple M5 (32 GB) verified
+and initialized the selected ISO in approximately 6.57 seconds. This measures
+local selection through engine readiness, with converted server assets already
+cached; it is not an internet first-download benchmark. Runtime gzip transfer
+was reduced from 113.1 MiB to 17.1 MiB without changing the Wasm bytes.
+
+The original optimized runtime `b81810e5f9fc8124`, using Turing/Mario versus
+original Fox on Battlefield, passed three consecutive 30-second CPU-combat
+windows with rendered audio and zero audio underruns:
+
+| Window | FPS | p95 ms | p99 ms |
+|---|---:|---:|---:|
+| 1 | 59.266 | 18.195 | 28.054 |
+| 2 | 59.967 | 17.260 | 17.665 |
+| 3 | 59.732 | 17.239 | 22.094 |
+
+Evidence: `build/local-disc-validation/two-player-fixed/`. A later fresh-profile
+repeat (`two-player-replay-final/`) measured 50.29–57.13 FPS with rendered audio
+and zero underruns; replay succeeded without rehashing or uploading the ISO.
+It fell below the target, so the earlier pass
+is not a repeatable performance certificate. The same runtime with
+Turing and original Fox, Link and Peach achieved only 45.94, 44.81 and 44.58 FPS
+(`four-player/`). These results do not certify all lineups or machines.
+
+Two isolated compiler experiments did not solve four-player performance:
+1024-instruction regions (`d74b371e37bd8691`) measured 37.43, 35.52 and 35.52 FPS;
+expanded hot-function LTO (`6809b0641b5b8f73`) measured 24.36, 39.03 and 42.84 FPS.
+The default optimized 256-instruction runtime remains selected. The four exact
+math specialization headers were byte-identical across region sizes. CPU traces
+in `four-profile/` attribute substantial time to dispatch and game execution;
+profiled windows are excluded from certification.
+
+Native's compact texture policy now also applies to browser matches with three
+or more custom costumes. This fixes the guest preload-heap assertion for
+Turing/Fox/Lincoln/Obama. A silent run briefly approached 60 FPS, but rendered zero
+audio samples and therefore failed validation (`four-compact/`). Explicit audio
+activation is now part of the test, and the runtime's pass flag requires both
+frame timing and audio health. The repeat with audio produced 40.10–47.03 FPS in complete audio-rendering
+windows, with a later audio-underrun failure (`four-compact-audio/`).
+Four-player sustained 60 FPS remains unmet.
+
+The September 11 native ARM64/x86 JIT improvement is relevant to the CPU bottleneck,
+but its machine-code emitter cannot execute in WebAssembly. The browser retains
+static recompilation. Increasing region size or compiler inlining is not equivalent
+to porting that JIT. Further browser CPU optimization is required before claiming
+native four-player performance parity.

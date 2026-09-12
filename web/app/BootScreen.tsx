@@ -1,11 +1,15 @@
 import {useEffect,useRef,useState} from 'react';
 import {desktop} from '@/lib/desktop';
+import {subscribeLocalDisc,selectLocalDisc,usesLocalDisc} from '@/lib/melee-session';
 type Setup={state:string;ready:boolean;message:string;progress?:number};
 export default function BootScreen({onReady}:{onReady:(ready:boolean)=>void}) {
  const [setup,setSetup]=useState<Setup>({state:'checking',ready:false,message:'Checking local game setup…'});
  const [error,setError]=useState(''),[connectionError,setConnectionError]=useState(''),[transfer,setTransfer]=useState<number|null>(null);
  const input=useRef<HTMLInputElement>(null),request=useRef<XMLHttpRequest|null>(null),ready=useRef(onReady);ready.current=onReady;
  useEffect(()=>{
+  if(!desktop()&&usesLocalDisc()){
+   return subscribeLocalDisc(status=>{setSetup(status);if(status.state!=='error')setError('');ready.current(status.ready);});
+  }
   const controller=new AbortController();let timer:ReturnType<typeof setTimeout>;
   async function poll(){
    try{const response=await fetch('/api/setup',{signal:controller.signal});if(!response.ok)throw Error('Start the local Melee server to load your game.');
@@ -22,6 +26,11 @@ export default function BootScreen({onReady}:{onReady:(ready:boolean)=>void}) {
    const header=await file.slice(0,0x440).arrayBuffer(),view=new DataView(header);
    if(new TextDecoder().decode(new Uint8Array(header,0,6))!=='GALE01'||view.getUint8(7)!==2||view.getUint32(0x1c)!==0xc2339f3d)throw Error('This is not Melee USA 1.02 (GALE01 revision 2). Choose the correct disc.');
   } catch(e){setError((e as Error).message);return;}
+  if(!desktop()&&usesLocalDisc()){
+   setError('');
+   try{await selectLocalDisc(file);}catch(e){setError((e as Error).message);}
+   return;
+  }
   setError('');setTransfer(0);ready.current(false);
   const xhr=new XMLHttpRequest();request.current=xhr;
   xhr.open('POST','/api/setup/disc');xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.timeout=600000;
@@ -35,13 +44,13 @@ export default function BootScreen({onReady}:{onReady:(ready:boolean)=>void}) {
  const busy=transfer!==null||['receiving','installing','checking'].includes(setup.state);
  return <section className="boot-screen launch-settings" aria-label="Game disc">
   <div className="boot-disc">
-   <p role="status">{transfer!==null?`Copying and checking disc… ${Math.round(transfer*100)}%`:setup.state==='failed'||setup.state==='error'?setup.message:setup.ready?'Ready to play.':busy?'Preparing your game…': 'Choose your Melee disc to get started.'}</p>
+   <p role="status">{transfer!==null?`Copying and checking disc… ${Math.round(transfer*100)}%`:setup.state==='failed'||setup.state==='error'?setup.message:setup.ready?'Ready to play.':busy?setup.message: 'Choose your Melee disc to get started.'}</p>
    {busy&&<progress aria-label="Disc setup progress" {...(transfer!==null?{value:transfer,max:1}:{})}/>}
    {(error||connectionError)&&<p role="alert">{error||connectionError}</p>}
    <input ref={input} type="file" accept=".iso,.gcm" aria-label="Choose Melee ISO or GCM" hidden onChange={e=>{select(e.target.files?.[0]);e.target.value='';}}/>
    <button className="boot-action" disabled={busy&&transfer===null&&!error&&!connectionError||transfer!==null} onClick={async()=>{if(desktop()){try{setError('');await desktop()!.chooseDisc();}catch(e){setError((e as Error).message);}}else input.current?.click();}}>{setup.ready?'Choose another disc':'Choose Melee ISO / GCM'}</button>
    {transfer!==null&&<button className="retro-site-link" onClick={()=>request.current?.abort()}>Cancel transfer</button>}
-   <small>Your disc stays on this computer. Choose your Melee USA 1.02 disc once to get started.</small>
+   <small>{!desktop()&&usesLocalDisc()?'Your ISO is read directly by this browser and is never uploaded. Select it again after refreshing the page.':'Your disc stays on this computer. Choose your Melee USA 1.02 disc once to get started.'}</small>
   </div>
  </section>;
 }

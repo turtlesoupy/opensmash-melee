@@ -17,9 +17,22 @@ npm install --prefix web
 npm run dev --prefix web
 ```
 
-Open http://127.0.0.1:5174. The loopback server verifies the known USA 1.02 ISO
-SHA-256 and extracted DOL before serving game resources. Game files and generated
-costumes stay local and ignored by Git. Character selection converts the selected
+Open http://127.0.0.1:5174 and select your USA 1.02 ISO in the browser. The browser
+verifies its SHA-256, parses its file table, and reads game files directly from
+the selected file through WORKERFS. The ISO is never uploaded. Only requested
+file slices enter the runtime; the whole disc is not copied into Wasm memory.
+Writable costume/menu slots overlay the read-only disc, preserving the original.
+Select the ISO again after a page refresh. Returning to the roster and replaying
+reuses the same verified File object without hashing the full disc again.
+
+The asset service is still required for custom-costume conversion, menu artwork,
+announcer clips and character imports. Its extracted game inputs are prepared by
+the command above; selecting a browser ISO does not populate the server's files.
+This is a local-disc browser trial, not a server-free static distribution.
+`?disc=server` retains the previous extracted-file transport for comparisons.
+Desktop disc setup continues to use its existing local installation flow.
+
+Game files and generated costumes stay local and ignored by Git. Character selection converts the selected
 OpenSmash source mesh into the assigned Melee costume, then boots the actual game.
 One engine preboots while the roster is visible; measured warmed clicks reach
 the match in about 1.4–2.4 seconds. See [STARTUP.md](STARTUP.md) for cold-launch
@@ -95,3 +108,51 @@ python3 tools/report_browser_fps.py
 The concatenation oracle compares full CPU state and RAM across 12,000 cases;
 the FMA oracle compares full CPU state across 960,000 cases against pinned,
 unmodified runtime source. Reports stay in `build/moderngekko-validation/`.
+
+## Local-disc validation and runtime delivery
+
+The headed Chrome check uses a fresh profile, rejects `/api/setup` and `/api/game`
+requests, and requires three consecutive passing 30-second combat windows, allowing up to
+250 seconds for warm-up. It explicitly activates audio and records AudioContext state. It retains frame-time,
+audio, network and screenshot evidence, including failed windows:
+
+```sh
+NODE_PATH=/path/to/playwright/node_modules node tools/validate_local_disc.cjs "$MELEE_ISO" build/local-disc-validation/two-player 2
+NODE_PATH=/path/to/playwright/node_modules node tools/validate_local_disc.cjs "$MELEE_ISO" build/local-disc-validation/four-player 4
+```
+
+Set `MELEE_CHECK_INVALID=1` to test a truncated disc and a full-size corrupted
+image before recovering with the valid ISO. `MELEE_REPLAY=1` also checks replay
+without a repeated full-disc hash. `MELEE_LINEUP=default` uses Turing, stock Fox, Lincoln and Obama.
+`MELEE_LINEUP=custom` uses Turing, Trump,
+Lincoln and Obama instead of the mixed Turing/Fox/Link/Peach four-player case.
+`MELEE_TEST_URL` selects another local server. For attribution only,
+`MELEE_TRACE=1` with a URL containing `?benchmark=1&profile=phases` records a CPU
+trace and phase counters; profiled runs cannot certify frame rate.
+
+The browser build produces gzip sidecars at build time. The local server serves
+those to supporting clients with the original MIME type. Runtime URLs carry a
+cache identity covering the Wasm and JavaScript files; matching versions are
+immutable, while the build manifest remains uncached. Stale version requests
+fail rather than mixing a new binary with old glue. The September 12 baseline
+Wasm is 118,615,393 bytes uncompressed and 17,963,498 bytes over gzip (17.1 MiB).
+Range reads retain the original uncompressed byte offsets.
+
+Region-size experiments run with `tools/build_recomp_browser.py
+--chunk-instructions 1024`. They use separate generated code and build directories,
+leaving the default 256-instruction build intact. Point `MELEE_BROWSER_BUILD` at
+an experimental output directory when launching the local server. This is an
+AOT code-layout experiment; native ARM/x86 JIT machine code cannot be reused by
+the browser runtime. Guest instructions, floating-point behavior, timing checks
+and mod callbacks remain required validation boundaries.
+
+The browser now follows native's compact texture policy when a match contains
+three or more custom costumes. Preparation and download both select
+`browser-compact` assets (256-pixel textures); source mesh geometry and weights
+are retained. This prevents the guest heap allocation failure in the tested
+Turing/Fox/Lincoln/Obama lineup.
+
+`--hot-lto` is another opt-in compiler experiment, publishing to a separate
+`-hot` output folder. Neither expanded LTO nor 1024-instruction regions met the
+four-player frame-rate target in the September 12 tests. The default remains
+256-instruction regions with the existing exact math specializations.

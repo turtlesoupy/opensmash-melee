@@ -22,7 +22,7 @@ GAME = ROOT / 'assets/game'
 CHARACTERS = Path(os.environ.get('OPENSMASH_CHARACTER_ROOT', ROOT.parent / 'opensmash/pipeline/play/ui')).expanduser().resolve()
 SYS = ROOT / 'build/browser-engine/moderngekko-web/vendor/dolphin/Data/Sys'
 WEB = ROOT / 'runtime/web'
-BUILD = ROOT / 'build/moderngekko-wasm'
+BUILD = Path(os.environ.get('MELEE_BROWSER_BUILD', ROOT / 'build/moderngekko-wasm')).expanduser().resolve()
 CATALOG = {r['slug']: r for r in json.loads((ROOT / 'web/public/catalog.json').read_text())}
 from opensmash_melee.targets import PLAYABLE, BY_SLUG, cache_id
 KINDS = {slug:(row['fighter'],row['code']) for slug,row in BY_SLUG.items()}
@@ -47,7 +47,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Cross-Origin-Resource-Policy', 'same-origin')
         self.send_header('Cross-Origin-Embedder-Policy', 'require-corp')
         self.send_header('Cross-Origin-Opener-Policy', 'same-origin')
-        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Cache-Control', getattr(self, 'asset_cache_control', 'no-store'))
+        self.asset_cache_control = 'no-store'
         super().end_headers()
 
     def json(self, value, status=200):
@@ -65,6 +66,22 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
     def file(self, path):
+        content_type = mimetypes.guess_type(str(path))[0] or 'application/octet-stream'
+        compressed = False
+        if path.parent == BUILD and path.suffix in ('.wasm', '.js'):
+            build = json.loads((BUILD / 'opensmash-web-build.json').read_text())
+            identity = build.get('cacheId', build['id'])
+            version = parse_qs(urlsplit(self.path).query).get('v')
+            if version and version != [identity]:
+                return self.send_error(409, 'The engine was updated. Refresh to load the new build.')
+            packed = path.with_name(path.name + '.gz')
+            encodings = self.headers.get('Accept-Encoding', '')
+            # Range requests address the original bytes; keep those uncompressed.
+            if not self.headers.get('Range') and re.search(r'(?:^|,)\s*gzip\s*(?:,|$)', encodings) and packed.is_file() and packed.stat().st_mtime >= path.stat().st_mtime:
+                path = packed
+                compressed = True
+            if version == [identity]:
+                self.asset_cache_control = 'public, max-age=31536000, immutable'
         size = path.stat().st_size
         start, end = 0, size - 1
         header = self.headers.get('Range')
@@ -77,7 +94,10 @@ class Handler(BaseHTTPRequestHandler):
             if start > end:
                 return self.send_error(416)
         self.send_response(206 if header else 200)
-        self.send_header('Content-Type', mimetypes.guess_type(str(path))[0] or 'application/octet-stream')
+        self.send_header('Content-Type', content_type)
+        self.send_header('Vary', 'Accept-Encoding')
+        if compressed:
+            self.send_header('Content-Encoding', 'gzip')
         self.send_header('Content-Length', str(end - start + 1))
         self.send_header('Accept-Ranges', 'bytes')
         if header:
@@ -155,7 +175,7 @@ class Handler(BaseHTTPRequestHandler):
                 if target not in BY_SLUG: raise ValueError('Unknown moveset')
                 fighter, code = KINDS[target]
                 ident = cache_id(slug,target,CATALOG[slug]['target'])
-                variant = 'browser/' if query.get('skin') == ['host'] else ''
+                variant = ('browser-compact/' if query.get('compact') == ['1'] else 'browser/') if query.get('skin') == ['host'] else ''
                 color = int(query.get('color', ['0'])[0])
                 slots = BY_SLUG[target]['costumes']
                 if not 0 <= color < len(slots): raise ValueError('Invalid color')
@@ -184,7 +204,10 @@ class Handler(BaseHTTPRequestHandler):
         if TOKEN and self.headers.get('X-OpenSmash-Token') != TOKEN:
             return False
         origin = self.headers.get('Origin', '')
-        return TOKEN or not origin or origin in ('http://127.0.0.1:5174', 'http://localhost:5174')
+        return TOKEN or not origin or origin in (
+            'http://127.0.0.1:5174', 'http://localhost:5174',
+            f'http://127.0.0.1:{self.server.server_port}',
+            f'http://localhost:{self.server.server_port}')
 
     def do_DELETE(self):
         if not self.local_ui_request():
@@ -309,7 +332,7 @@ class Handler(BaseHTTPRequestHandler):
             from tools.upgrade_character_surfaces import upgrade
             upgrade(ident, CHARACTERS / slug)
         host_skin = parse_qs(urlsplit(self.path).query).get('skin') == ['host']
-        compact = NATIVE is not None and query.get('compact') == ['1']
+        compact = host_skin and query.get('compact') == ['1']
         skin_folder = 'browser-compact' if compact else 'browser'
         if host_skin:
             with LOCK:
@@ -341,7 +364,7 @@ class Handler(BaseHTTPRequestHandler):
                 folder = output / skin_folder if host_skin else output
                 raw = costume_variant((folder / slots[0]['filename']).read_bytes(), fighter, color, target)
                 (folder / filename).write_bytes(raw)
-        self.json({'fighter': fighter, 'filename': filename, 'url': f'/api/costume/{slug}?target={target}&color={color}' + ('&skin=host' if host_skin else '')})
+        self.json({'fighter': fighter, 'filename': filename, 'url': f'/api/costume/{slug}?target={target}&color={color}' + ('&skin=host' if host_skin else '') + ('&compact=1' if compact else '')})
 
     def log_message(self, fmt, *args):
         if self.command == 'POST' or (args and str(args[1]) not in ('200', '206')):
