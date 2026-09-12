@@ -239,6 +239,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not 0<length<=65536:raise ValueError('Invalid request size')
                 body=json.loads(self.rfile.read(length))
                 if self.path=='/api/native/begin':return self.json(NATIVE.begin(body.get('session')))
+                if self.path=='/api/native/preflight':return self.json(NATIVE.preflight(body))
                 if self.path=='/api/native/launch':return self.json(NATIVE.launch(body))
                 if self.path=='/api/native/shutdown':
                     SETUP.cancel()

@@ -14,7 +14,7 @@ export default function NativeGame({
   roster: Fighter[];
   onClose: () => void;
 }) {
-  const [status, setStatus] = useState("Preparing your character…"),
+  const [status, setStatus] = useState("Checking your controllers…"),
     [error, setError] = useState("");
   const embedded = desktop()?.embedded;
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -88,11 +88,14 @@ export default function NativeGame({
         setError("");
         setHasFrame(false);
         setGameReady(false);
+        const launch = plan(settings, fighter, roster);
+        setStatus("Checking your controllers…");
+        await request("/api/native/preflight", launch);
+        if (closed) return;
         setStatus("Closing the previous match…");
         await desktop()!.beginGame(session);
         if (closed) return;
         desktop()!.setGameActive(true);
-        const launch = plan(settings, fighter, roster);
         let prepared = 0;
         const preparationStatus = () => {
           const name = launch.costumes.length === 1

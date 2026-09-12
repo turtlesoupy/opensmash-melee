@@ -274,7 +274,33 @@ class NativeService:
             names.update({k: v + " Arrow" for k, v in arrows.items()})
         return names.get(code)
 
+    def preflight(self, plan):
+        if not isinstance(plan, dict):
+            raise ValueError("Invalid launch plan")
+        self.validate({**plan, "costumes": []})
+        self.check_controllers(plan["ports"])
+        return {"ready": True}
+
+    def check_controllers(self, ports):
+        pads = []
+        if any(p["device"].startswith("gamepad") for p in ports):
+            helper = self.runtime / self.manifest["controllers"]
+            result = subprocess.run(
+                [str(helper)], capture_output=True, text=True, timeout=10
+            )
+            pads = [line for line in result.stdout.splitlines() if line.startswith("SDL/")]
+        for p in ports:
+            if p["device"].startswith("gamepad"):
+                index = int(p["device"][-1])
+                if index >= len(pads):
+                    raise ValueError(
+                        "Gamepad %d is not connected. Connect it or choose Keyboard."
+                        % (index + 1)
+                    )
+        return pads
+
     def controllers(self, ports, controls=None):
+        pads = self.check_controllers(ports)
         config = self.user / "Config"
         config.mkdir(parents=True, exist_ok=True)
         embedded = bool(os.environ.get("OPENSMASH_INPUT_FILE"))
@@ -286,13 +312,6 @@ class NativeService:
             keyboard, backend = "DInput/0/Keyboard Mouse", "dinput"
         else:
             keyboard, backend = "XInput2/0/Virtual core pointer", "xinput2"
-        helper = self.runtime / self.manifest["controllers"]
-        pads = []
-        if any(p["device"].startswith("gamepad") for p in ports):
-            result = subprocess.run(
-                [str(helper)], capture_output=True, text=True, timeout=10
-            )
-            pads = [line for line in result.stdout.splitlines() if line.startswith("SDL/")]
         keys, buttons = self.bindings(controls, embedded)
         quote = lambda name: "`" + name + "`"
         keyboard_bind = {
@@ -336,11 +355,6 @@ class NativeService:
                 continue
             if d.startswith("gamepad"):
                 index = int(d[-1])
-                if index >= len(pads):
-                    raise ValueError(
-                        "Gamepad %d is not connected. Connect it or choose Keyboard."
-                        % (index + 1)
-                    )
                 device = pads[index]
                 bindings = pad_bind
             else:

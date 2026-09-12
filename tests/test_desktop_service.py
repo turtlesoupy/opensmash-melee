@@ -184,6 +184,24 @@ class DesktopServiceTests(unittest.TestCase):
             self.service.controllers(self.plan["ports"])
         probe.assert_not_called()
 
+    def test_preflight_rejects_missing_controller_before_preparation(self):
+        self.plan["ports"][0]["device"] = "gamepad0"
+        self.plan["costumes"] = [{"character": "not-prepared"}]
+        with patch("opensmash_melee.native_service.subprocess.run",
+                   return_value=SimpleNamespace(stdout="")):
+            with self.assertRaisesRegex(ValueError, "Gamepad 1 is not connected"):
+                self.service.preflight(self.plan)
+        self.assertFalse(self.service.user.exists())
+        self.assertIsNone(self.service.session)
+
+    def test_preflight_accepts_connected_controller_without_prepared_costumes(self):
+        self.plan["ports"][0]["device"] = "gamepad0"
+        self.plan["costumes"] = [{"character": "not-prepared"}]
+        with patch("opensmash_melee.native_service.subprocess.run",
+                   return_value=SimpleNamespace(stdout="SDL/0/Test Pad\n")):
+            self.assertEqual(self.service.preflight(self.plan), {"ready": True})
+        self.assertFalse(self.service.user.exists())
+
     def test_default_keyboard_bindings_match_the_controls_screen(self):
         with patch.dict(os.environ, {"OPENSMASH_INPUT_FILE": "/tmp/input"}):
             self.service.controllers(self.plan["ports"])
