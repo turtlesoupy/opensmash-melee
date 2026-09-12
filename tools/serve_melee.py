@@ -232,7 +232,7 @@ class Handler(BaseHTTPRequestHandler):
                 from opensmash_melee.character_select import catalog_identities, character_select_assets
                 entries = catalog_identities(ROOT, CATALOG, body.get('costumes'))
                 with LOCK:
-                    assets = character_select_assets(GAME, entries)
+                    assets = character_select_assets(GAME, entries, cache=ROOT / 'build/announcer-cache')
                     key = hashlib.sha256(b''.join(assets.values())).hexdigest()
                     folder = ROOT / 'build/character-select' / key
                     folder.mkdir(parents=True, exist_ok=True)

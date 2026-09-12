@@ -4,13 +4,14 @@ from pathlib import Path
 import struct
 import tempfile
 import unittest
+from unittest.mock import patch
 import wave
 
 import numpy as np
 from PIL import Image
 from opensmash_melee.archive import Archive
 from opensmash_melee.character_select import (catalog_identities, dsp_clip,
-    extend_menu, extend_sound_bank, SYMBOL, SAMPLE_BASE)
+    character_select_assets, extend_menu, extend_sound_bank, SYMBOL, SAMPLE_BASE)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -63,6 +64,55 @@ class CharacterSelectTests(unittest.TestCase):
             self.assertEqual(loop, current)
             self.assertLess(current, end)
             self.assertLess(end, sample_size * 2)
+
+    def test_encoder_matches_original_bytes_for_mono_and_stereo(self):
+        # Golden outputs from the original exhaustive encoder: silence, clipping,
+        # fractional stereo averages, predictor ties, and an incomplete block.
+        digests = ['03c72c70e669fcad8908aa0221d9838ad61dac6ea5631abc62d78007887c3044',
+                   'e4657cbafec760efcfb4676c35b613595965120d172e84d6f242693759152f35']
+        path = self.source / 'golden.wav'
+        for channels, digest in enumerate(digests, 1):
+            samples = np.array(([0] * 28 + [-32768, 32767, 1, -1, 0, 2, -2] +
+                                [((i * 7919) % 65536) - 32768 for i in range(65)]) * channels, dtype='<i2')
+            with wave.open(str(path), 'wb') as wav:
+                wav.setparams((channels, 2, 32000, 0, 'NONE', 'not compressed'))
+                wav.writeframes(samples.tobytes())
+            self.assertEqual(hashlib.sha256(dsp_clip(path)[0]).hexdigest(), digest)
+
+    def test_audio_cache_reuses_content_and_recovers_from_corruption(self):
+        path, cache = self.source / 'announcer.wav', self.source / 'cache'
+        expected = dsp_clip(path, cache)
+        with patch('opensmash_melee.character_select.encode_dsp', side_effect=AssertionError('Re-encoded cached audio')):
+            self.assertEqual(dsp_clip(path, cache), expected)
+        next(cache.glob('*.dsp')).write_bytes(b'corrupt')
+        self.assertEqual(dsp_clip(path, cache), expected)
+        # Same path and length, different PCM: must not reuse the old encoding.
+        with wave.open(str(path), 'wb') as wav:
+            wav.setparams((1, 2, 32000, 0, 'NONE', 'not compressed'))
+            wav.writeframes(bytes(len(self.samples) * 2))
+        self.assertNotEqual(dsp_clip(path, cache)[0], expected[0])
+        self.assertEqual(len(list(cache.glob('*.dsp'))), 2)
+
+    def test_unwritable_cache_does_not_prevent_encoding(self):
+        path = self.source / 'announcer.wav'
+        expected = dsp_clip(path)
+        with patch.object(Path, 'mkdir', side_effect=PermissionError('Read only')):
+            self.assertEqual(dsp_clip(path, self.source / 'cache'), expected)
+
+    def test_regional_banks_share_one_encode_per_source(self):
+        game = self.source / 'game'
+        bank = struct.pack('>4I', 72, 32, 1, 100) + bytes(72 + 8 + 32)
+        for suffix, menu in [('', 'MnSlChr.dat'), ('us/', 'MnSlChr.usd')]:
+            path = game / 'files/audio' / suffix / 'nr_select.ssm'
+            path.parent.mkdir(parents=True)
+            path.write_bytes(bank)
+            (game / 'files' / menu).write_bytes(b'menu')
+        with patch('opensmash_melee.character_select.dsp_clip', wraps=dsp_clip) as encode:
+            with patch('opensmash_melee.character_select.extend_menu', return_value=b'extended'):
+                outputs = character_select_assets(game, [(8, 1, self.source), (8, 2, self.source)])
+        self.assertEqual(encode.call_count, 1)
+        self.assertEqual(len(outputs), 4)
+        self.assertEqual(outputs['audio/nr_select.ssm'], outputs['audio/us/nr_select.ssm'])
 
     @unittest.skipUnless((ROOT / 'assets/game/files/MnSlChr.usd').exists(), 'Requires local verified game')
     def test_menu_relocation_pages_and_original_joint_indices(self):

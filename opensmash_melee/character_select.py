@@ -3,8 +3,11 @@
 OSCS v1 is consumed by runtime/mods/character_select.h. Pages retain Melee's
 moveset grid; successive customs sharing a moveset occupy successive pages.
 """
+import hashlib
+import io
 import json
 import struct
+import uuid
 import wave
 from pathlib import Path
 
@@ -50,26 +53,57 @@ def portrait(source, size, label=True):
     return canvas
 
 
-def dsp_clip(path):
+def dsp_clip(path, cache=None):
     """Encode Nintendo DSP ADPCM with a deterministic first-order predictor.
 
     Source announcers are short mono PCM recordings. Search each block's scale
     and predictor rather than truncating samples or changing their pitch.
+    The optional cache is keyed by WAV content and encoding version, so edited
+    recordings invalidate it. Bump the version if the encoding format changes.
     """
+    raw = Path(path).read_bytes()
     try:
-        stream = wave.open(str(path), 'rb')
+        stream = wave.open(io.BytesIO(raw), 'rb')
     except (wave.Error, EOFError) as error:
         raise ValueError('Invalid announcer PCM WAV') from error
     with stream as wav:
         channels, width, rate, count = wav.getnchannels(), wav.getsampwidth(), wav.getframerate(), wav.getnframes()
         if width != 2 or channels not in (1, 2) or not 8000 <= rate <= 48000 or not 0 < count <= rate * 15:
             raise ValueError('Announcer must be a mono/stereo 16-bit PCM WAV, at most 15 seconds')
-        samples = np.frombuffer(wav.readframes(count), dtype='<i2').reshape(-1, channels).mean(axis=1)
+        samples = np.frombuffer(wav.readframes(count), dtype='<i2').reshape(-1, channels).mean(axis=1).tolist()
     coefficients = [(0, 0), (2048, 0), (4096, -2048), (3072, -1024)] + [(0, 0)] * 4
+    cached = None
+    if cache is not None:
+        cached = Path(cache) / (hashlib.sha256(b'opensmash-dsp-v1\0' + raw).hexdigest() + '.dsp')
+        try:
+            stored = cached.read_bytes()
+            data = stored[32:]
+            if len(data) == ((count + 13) // 14) * 8 and stored[:32] == hashlib.sha256(data).digest():
+                return data, rate, count, coefficients
+        except OSError:
+            pass
+    data = encode_dsp(samples, coefficients)
+    if cached is not None:
+        temporary = cached.with_suffix('.' + uuid.uuid4().hex + '.tmp')
+        try:
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            temporary.write_bytes(hashlib.sha256(data).digest() + data)
+            temporary.replace(cached)
+        except OSError:
+            pass  # An unwritable cache must not prevent a match from starting.
+        finally:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+    return data, rate, count, coefficients
+
+
+def encode_dsp(samples, coefficients):
     encoded = bytearray()
     history = [0, 0]
-    for start in range(0, count, 14):
-        block = list(samples[start:start + 14])
+    for start in range(0, len(samples), 14):
+        block = samples[start:start + 14]
         block += [0] * (14 - len(block))
         best = None
         for predictor, (c1, c2) in enumerate(coefficients[:4]):
@@ -77,11 +111,17 @@ def dsp_clip(path):
             for scale in range(13):
                 h1, h2 = history
                 error, nibbles = 0, []
+                step = 1 << scale
                 for value in block:
                     predicted = (c1 * h1 + c2 * h2 + 1024) >> 11
-                    quantized = max(-8, min(7, round((value - predicted) / (1 << scale))))
-                    decoded = max(-32768, min(32767, predicted + (quantized << scale)))
+                    quantized = round((value - predicted) / step)
+                    quantized = -8 if quantized < -8 else 7 if quantized > 7 else quantized
+                    decoded = predicted + (quantized << scale)
+                    decoded = -32768 if decoded < -32768 else 32767 if decoded > 32767 else decoded
                     error += (value - decoded) ** 2
+                    # Squared error only increases; this candidate cannot win.
+                    if best is not None and error >= best[0]:
+                        break
                     nibbles.append(quantized & 15)
                     h2, h1 = h1, decoded
                 if best is None or error < best[0]:
@@ -89,10 +129,10 @@ def dsp_clip(path):
         _, predictor, scale, nibbles, history = best
         encoded.append((predictor << 4) | scale)
         encoded.extend((nibbles[i] << 4) | nibbles[i + 1] for i in range(0, 14, 2))
-    return bytes(encoded), rate, count, coefficients
+    return bytes(encoded)
 
 
-def extend_sound_bank(raw, sources):
+def extend_sound_bank(raw, sources, *, clips=None):
     header_size, sample_size, count, base = struct.unpack_from('>4I', raw)
     base = SAMPLE_BASE  # Do not collide with nr_1p.ssm when modes share banks.
     sample_start = (header_size + 16 + 31) & ~31
@@ -102,7 +142,7 @@ def extend_sound_bank(raw, sources):
     samples = bytearray(raw[sample_start:])
     ids = []
     for source in sources:
-        data, rate, frames, coefficients = dsp_clip(source / 'announcer.wav')
+        data, rate, frames, coefficients = clips[source] if clips is not None else dsp_clip(source / 'announcer.wav')
         samples.extend(bytes(-len(samples) % 32))
         offset = len(samples) * 2
         samples.extend(data)
@@ -189,7 +229,7 @@ def extend_menu(raw, entries, sound_ids):
     return a.serialize()
 
 
-def character_select_assets(game, entries):
+def character_select_assets(game, entries, *, cache=None):
     """Entries are (external fighter ID, costume color, validated source folder)."""
     if not entries:
         return {}
@@ -207,16 +247,18 @@ def character_select_assets(game, entries):
     game = Path(game)
     # Build all outputs before replacing any staged hard links.
     outputs = {}
+    sources = list(dict.fromkeys(e[2] for e in normalized))
+    clips = {source: dsp_clip(source / 'announcer.wav', cache) for source in sources}
     for suffix in ('', 'us/'):
         path = game / 'files/audio' / suffix / 'nr_select.ssm'
-        outputs[path], ids = extend_sound_bank(path.read_bytes(), [e[2] for e in normalized])
+        outputs[path], ids = extend_sound_bank(path.read_bytes(), [e[2] for e in normalized], clips=clips)
         menu = game / ('files/MnSlChr.usd' if suffix else 'files/MnSlChr.dat')
         outputs[menu] = extend_menu(menu.read_bytes(), normalized, ids)
     return {path.relative_to(game / 'files').as_posix(): data for path, data in outputs.items()}
 
 
-def stage_character_select(game, entries):
-    for name, data in character_select_assets(game, entries).items():
+def stage_character_select(game, entries, *, cache=None):
+    for name, data in character_select_assets(game, entries, cache=cache).items():
         path = Path(game) / 'files' / name
         path.unlink()  # The staging tree can contain hard links to the source disc.
         path.write_bytes(data)

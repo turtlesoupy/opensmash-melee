@@ -374,7 +374,8 @@ class NativeService:
                     shutil.copy2(source, target)
                 if costumes:
                     from .character_select import stage_character_select, catalog_identities
-                    stage_character_select(stage, catalog_identities(self.root, self.catalog, plan["costumes"]))
+                    stage_character_select(stage, catalog_identities(self.root, self.catalog, plan["costumes"]),
+                                           cache=self.root / "build/announcer-cache")
                 if game.exists():
                     shutil.rmtree(game)
                 stage.rename(game)

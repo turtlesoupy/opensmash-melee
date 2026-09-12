@@ -219,3 +219,21 @@ The final shipping binary (including early cancellation) was checked again for
 60 seconds with zero warmup: 59.95 FPS, minimum 59 frames in any one-second
 window, combat at 5.15 seconds, clean exit. Runner SHA-256:
 `d37abe2ac94b781708a846ec0e87455a2eb49c84a7aa81c670423e6f9daecf28`.
+
+After integrating character-select identities, profiling found that each launch
+encoded the same announcer twice for the regional sound banks. Encoding one
+Obama clip took 5.21 seconds and Trump took 3.57 seconds. Using Python floats
+instead of NumPy scalars and abandoning candidates whose error already exceeds
+the best candidate reduced those times to 0.50 and 0.36 seconds, with identical
+encoded bytes. Both banks now share one encoding per source. Desktop and web
+services retain content-addressed audio under `build/announcer-cache`; changed
+WAV content invalidates the entry, corrupt entries are rebuilt, and an
+unwritable cache does not prevent launching.
+
+The actual Electron test with empty audio caches reached Obama in 6.29 seconds
+and replaced him with Trump in 6.47 seconds. After restarting the app, those
+times were 5.89 and 5.95 seconds. Both runs verified clean shutdown when
+refreshing during combat and during preparation. Mono/stereo golden tests and
+comparisons with the original encoder preserve audio output, including silence,
+clipping, predictor ties, and partial blocks. These changes do not alter the
+native engine or its execution policy and also apply to browser asset staging.
