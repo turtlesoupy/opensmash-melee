@@ -277,6 +277,7 @@ def build(inputs, out):
                 "protocol": 1,
                 "gracefulShutdown": "file-v1",
                 "characterSelect": 1,
+                "keyboardKeys": 2,
                 "platform": sys.platform,
                 "architecture": platform.machine(),
                 "embeddedSurfaces": ["rgba-memory-v1"] + (["iosurface-v1"] if sys.platform == "darwin" else []),

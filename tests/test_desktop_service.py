@@ -184,6 +184,55 @@ class DesktopServiceTests(unittest.TestCase):
             self.service.controllers(self.plan["ports"])
         probe.assert_not_called()
 
+    def test_default_keyboard_bindings_match_the_controls_screen(self):
+        with patch.dict(os.environ, {"OPENSMASH_INPUT_FILE": "/tmp/input"}):
+            self.service.controllers(self.plan["ports"])
+        ini = (self.service.user / "Config/GCPadNew.ini").read_text()
+        for line in ["Device = OpenSmash/0/Keyboard", "Buttons/A = `J`", "Buttons/X = `Space`",
+                     "Buttons/Z = `U`", "Buttons/Start = `Return`", "C-Stick/Up = `Up Arrow`",
+                     "Triggers/L-Analog = `Q`", "D-Pad/Up = `T`"]:
+            self.assertIn(line, ini)
+
+    def test_rebound_controls_reach_the_pad_config(self):
+        controls = {
+            "keyboard": {"a": "KeyT", "start": "Digit1", "cup": "Space", "x": "Escape", "z": 5},
+            "gamepad": {"a": 1, "b": 0, "z": 4, "l": 99, "bogus": 2},
+        }
+        self.service.manifest["keyboardKeys"] = 2
+        with patch.dict(os.environ, {"OPENSMASH_INPUT_FILE": "/tmp/input"}):
+            self.service.controllers(self.plan["ports"], controls)
+        ini = (self.service.user / "Config/GCPadNew.ini").read_text()
+        self.assertIn("Buttons/A = `T`", ini)
+        self.assertIn("Buttons/Start = `1`", ini)
+        self.assertIn("C-Stick/Up = `Space`", ini)
+        self.assertIn("Buttons/X = `Space`", ini)  # invalid code keeps the default
+        self.assertIn("Buttons/Z = `U`", ini)
+        self.assertNotIn("D-Pad/Up", ini)  # T now attacks, so the fixed D-pad key yields
+        keyboard, gamepad = self.service.bindings(controls)
+        self.assertEqual((gamepad["a"], gamepad["b"], gamepad["z"], gamepad["l"]), (1, 0, 4, 6))
+        self.assertNotIn("bogus", gamepad)
+        self.assertEqual(keyboard["y"], "KeyI")
+
+    def test_old_embedded_runtime_only_rebinds_keys_it_can_name(self):
+        controls = {"keyboard": {"a": "KeyP", "b": "KeyT", "start": "Digit1"}}
+        keyboard, _ = self.service.bindings(controls, embedded=True)
+        self.assertEqual((keyboard["a"], keyboard["b"], keyboard["start"]), ("KeyJ", "KeyT", "Enter"))
+        keyboard, _ = self.service.bindings(controls, embedded=False)
+        self.assertEqual((keyboard["a"], keyboard["start"]), ("KeyP", "Digit1"))
+        self.service.manifest["keyboardKeys"] = 2
+        keyboard, _ = self.service.bindings(controls, embedded=True)
+        self.assertEqual((keyboard["a"], keyboard["start"]), ("KeyP", "Digit1"))
+
+    def test_key_names_follow_each_dolphin_backend(self):
+        name = self.service.key_name
+        self.assertEqual([name("Enter", b) for b in ["embedded", "quartz", "dinput", "xinput2"]],
+                         ["Return", "Return", "RETURN", "Return"])
+        self.assertEqual([name("Space", b) for b in ["quartz", "dinput", "xinput2"]], ["Space", "SPACE", "space"])
+        self.assertEqual([name("ArrowLeft", b) for b in ["quartz", "dinput", "xinput2"]], ["Left Arrow", "LEFT", "Left"])
+        self.assertEqual(name("Digit7", "dinput"), "7")
+        self.assertIsNone(name("Escape", "quartz"))
+        self.assertIsNone(name("Keyboard", "quartz"))
+
     def test_packed_ports_are_derived_not_trusted(self):
         self.plan["packedPorts"] = [999] * 4
         packed, _ = self.service.validate(self.plan)

@@ -23,7 +23,7 @@ You'll need your own **unmodified Super Smash Bros. Melee USA 1.02 disc image** 
 
 1. Open OpenSmash Melee and choose your disc image when prompted. Setup stays on your computer and leaves the original image unchanged.
 2. Wait for setup to finish, then pick a fighter from the roster.
-3. Open **Settings** to choose your opponents, stage, match rules, and controllers. Open **Controls** for the button mappings.
+3. Pick a fighter to face a random Melee fighter and two random custom characters. Open **Settings** to choose your opponents, stage, match rules, and controllers. Open **Controls** to see the button mappings light up as you press them, and to rebind keys or gamepad buttons.
 
 Custom fighters use the moves of Mario, Luigi, Captain Falcon, Fox, Marth, or Link. You can jump into a match or use Settings to start from Melee's menus.
 

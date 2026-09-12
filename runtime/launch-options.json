@@ -38,11 +38,11 @@
     },
     {
       "id": 3,
-      "label": "Pok\u00e9mon Stadium"
+      "label": "Pokémon Stadium"
     },
     {
       "id": 4,
-      "label": "Peach\u2019s Castle"
+      "label": "Peach’s Castle"
     },
     {
       "id": 5,
@@ -58,7 +58,7 @@
     },
     {
       "id": 8,
-      "label": "Yoshi\u2019s Story"
+      "label": "Yoshi’s Story"
     },
     {
       "id": 9,
@@ -90,7 +90,7 @@
     },
     {
       "id": 16,
-      "label": "Yoshi\u2019s Island"
+      "label": "Yoshi’s Island"
     },
     {
       "id": 17,
@@ -114,7 +114,7 @@
     },
     {
       "id": 23,
-      "label": "Pok\u00e9 Floats"
+      "label": "Poké Floats"
     },
     {
       "id": 24,
@@ -134,7 +134,7 @@
     },
     {
       "id": 29,
-      "label": "Yoshi\u2019s Island 64"
+      "label": "Yoshi’s Island 64"
     },
     {
       "id": 30,
@@ -268,15 +268,15 @@
       },
       {
         "device": "cpu",
-        "character": "vanilla:12"
+        "character": "random:vanilla"
       },
       {
-        "device": "off",
-        "character": "vanilla:2"
+        "device": "cpu",
+        "character": "random"
       },
       {
-        "device": "off",
-        "character": "vanilla:9"
+        "device": "cpu",
+        "character": "random"
       }
     ]
   },

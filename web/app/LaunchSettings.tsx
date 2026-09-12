@@ -11,7 +11,7 @@ function CharacterInput({value,onChange,choices}:{value:string,onChange:(value:s
  }}/>;
 }
 export default function LaunchSettings({value,onChange,roster,section='all'}:{section?:'all'|'gameplay'|'controllers',value:Settings,onChange:(s:Settings)=>void,roster:Fighter[]}) {
- const choices=[{id:'selected',label:'Use roster selection'},...schema.fighters.map(f=>({id:'vanilla:'+f.id,label:f.label+' (Melee)'})),...roster.map(f=>({id:f.slug,label:f.name}))];
+ const choices=[{id:'selected',label:'Use roster selection'},{id:'random',label:'Random custom character'},{id:'random:vanilla',label:'Random Melee fighter'},...schema.fighters.map(f=>({id:'vanilla:'+f.id,label:f.label+' (Melee)'})),...roster.map(f=>({id:f.slug,label:f.name}))];
  const set=(key:string,n:number)=>onChange({...value,[key]:n});
  const port=(index:number,key:string,v:string)=>onChange({...value,ports:value.ports.map((p,i)=>i===index?{...p,[key]:v}:p)});
  return <section className="launch-settings" aria-label="Launch settings">{section!=='controllers'&&<div className="launch-rules">

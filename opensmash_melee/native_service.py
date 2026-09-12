@@ -204,18 +204,93 @@ class NativeService:
             paths.append((source, c["filename"]))
         return packed, paths
 
-    def controllers(self, ports):
+    # Rebindable controls the Controls screen saves (see web/lib/controls.ts).
+    ACTIONS = [
+        "up", "down", "left", "right", "a", "b", "x", "y", "z", "l", "r", "start",
+        "cup", "cdown", "cleft", "cright",
+    ]
+    BUTTONS = ["a", "b", "x", "y", "z", "l", "r", "start"]
+    DEFAULT_KEYBOARD = {
+        "up": "KeyW", "down": "KeyS", "left": "KeyA", "right": "KeyD",
+        "a": "KeyJ", "b": "KeyK", "x": "Space", "y": "KeyI", "z": "KeyU",
+        "l": "KeyQ", "r": "KeyE", "start": "Enter",
+        "cup": "ArrowUp", "cdown": "ArrowDown", "cleft": "ArrowLeft", "cright": "ArrowRight",
+    }
+    DEFAULT_GAMEPAD = {"a": 0, "b": 1, "x": 2, "y": 3, "z": 5, "l": 6, "r": 7, "start": 9}
+    # Dolphin SDL input names by standard-mapping gamepad button index.
+    SDL_BUTTONS = [
+        "Button A", "Button B", "Button X", "Button Y", "Shoulder L", "Shoulder R",
+        "Trigger L", "Trigger R", "Back", "Start", "Thumb L", "Thumb R",
+        "Pad N", "Pad S", "Pad W", "Pad E",
+    ]
+    BINDING_TARGETS = {
+        "up": "Main Stick/Up", "down": "Main Stick/Down",
+        "left": "Main Stick/Left", "right": "Main Stick/Right",
+        "a": "Buttons/A", "b": "Buttons/B", "x": "Buttons/X", "y": "Buttons/Y",
+        "z": "Buttons/Z", "l": "Triggers/L", "r": "Triggers/R", "start": "Buttons/Start",
+        "cup": "C-Stick/Up", "cdown": "C-Stick/Down",
+        "cleft": "C-Stick/Left", "cright": "C-Stick/Right",
+    }
+
+    # Keys the first embedded runtime's keyboard device exposed; newer runtimes
+    # (manifest keyboardKeys >= 2) name every rebindable key.
+    LEGACY_EMBEDDED_KEYS = {"Key" + c for c in "ASDFHGQWETOUIJK"} | {
+        "Enter", "Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
+    }
+
+    def bindings(self, controls, embedded=False):
+        """Merge saved controls over the defaults, dropping anything malformed."""
+        keyboard = dict(self.DEFAULT_KEYBOARD)
+        gamepad = dict(self.DEFAULT_GAMEPAD)
+        controls = controls if isinstance(controls, dict) else {}
+        limited = embedded and (self.manifest.get("keyboardKeys") or 1) < 2
+        saved = controls.get("keyboard")
+        if isinstance(saved, dict):
+            for action in self.ACTIONS:
+                code = saved.get(action)
+                if not isinstance(code, str) or not self.key_name(code, "embedded"):
+                    continue
+                if limited and code not in self.LEGACY_EMBEDDED_KEYS:
+                    continue
+                keyboard[action] = code
+        saved = controls.get("gamepad")
+        if isinstance(saved, dict):
+            for action in self.BUTTONS:
+                index = saved.get(action)
+                if isinstance(index, int) and 0 <= index < len(self.SDL_BUTTONS):
+                    gamepad[action] = index
+        return keyboard, gamepad
+
+    @staticmethod
+    def key_name(code, backend):
+        """Dolphin's name for a DOM key code on one keyboard backend, or None."""
+        arrows = {"ArrowUp": "Up", "ArrowDown": "Down", "ArrowLeft": "Left", "ArrowRight": "Right"}
+        if len(code) == 4 and code.startswith("Key") and code[3].isupper() and code[3].isalpha():
+            return code[3]
+        if len(code) == 6 and code.startswith("Digit") and code[5].isdigit():
+            return code[5]
+        if backend == "dinput":
+            names = {"Space": "SPACE", "Enter": "RETURN"}
+            names.update({k: v.upper() for k, v in arrows.items()})
+        elif backend == "xinput2":
+            names = {"Space": "space", "Enter": "Return", **arrows}
+        else:  # Quartz and the embedded OpenSmash keyboard share names.
+            names = {"Space": "Space", "Enter": "Return"}
+            names.update({k: v + " Arrow" for k, v in arrows.items()})
+        return names.get(code)
+
+    def controllers(self, ports, controls=None):
         config = self.user / "Config"
         config.mkdir(parents=True, exist_ok=True)
-        keyboard = (
-            "Quartz/0/Keyboard & Mouse"
-            if sys.platform == "darwin"
-            else (
-                "DInput/0/Keyboard Mouse"
-                if os.name == "nt"
-                else "XInput2/0/Virtual core pointer"
-            )
-        )
+        embedded = bool(os.environ.get("OPENSMASH_INPUT_FILE"))
+        if embedded:
+            keyboard, backend = "OpenSmash/0/Keyboard", "embedded"
+        elif sys.platform == "darwin":
+            keyboard, backend = "Quartz/0/Keyboard & Mouse", "quartz"
+        elif os.name == "nt":
+            keyboard, backend = "DInput/0/Keyboard Mouse", "dinput"
+        else:
+            keyboard, backend = "XInput2/0/Virtual core pointer", "xinput2"
         helper = self.runtime / self.manifest["controllers"]
         pads = []
         if any(p["device"].startswith("gamepad") for p in ports):
@@ -223,55 +298,20 @@ class NativeService:
                 [str(helper)], capture_output=True, text=True, timeout=10
             )
             pads = [line for line in result.stdout.splitlines() if line.startswith("SDL/")]
+        keys, buttons = self.bindings(controls, embedded)
+        quote = lambda name: "`" + name + "`"
         keyboard_bind = {
-            "Buttons/A": "J",
-            "Buttons/B": "K",
-            "Buttons/X": "U | Space",
-            "Buttons/Y": "I",
-            "Buttons/Z": "O",
-            "Buttons/Start": "Return",
-            "Main Stick/Up": "W",
-            "Main Stick/Down": "S",
-            "Main Stick/Left": "A",
-            "Main Stick/Right": "D",
-            "C-Stick/Up": "`Up Arrow`",
-            "C-Stick/Down": "`Down Arrow`",
-            "C-Stick/Left": "`Left Arrow`",
-            "C-Stick/Right": "`Right Arrow`",
-            "Triggers/L": "Q",
-            "Triggers/R": "E",
+            self.BINDING_TARGETS[action]: quote(self.key_name(code, backend))
+            for action, code in keys.items()
         }
-        # Dolphin's backend key names differ even for Return/Space and arrows.
-        embedded = bool(os.environ.get("OPENSMASH_INPUT_FILE"))
-        if embedded:
-            keyboard = "OpenSmash/0/Keyboard"
-        if os.name == "nt" and not embedded:
-            keyboard_bind["Buttons/Start"] = "RETURN"
-            keyboard_bind["Buttons/X"] = "U | SPACE"
-        elif sys.platform.startswith("linux") and not embedded:
-            keyboard_bind["Buttons/X"] = "U | space"
-        if sys.platform != "darwin" and not embedded:
-            for direction in ["Up", "Down", "Left", "Right"]:
-                keyboard_bind["C-Stick/" + direction] = (
-                    direction.upper() if os.name == "nt" else direction
-                )
-        keyboard_bind.update(
-            {
-                "Triggers/L-Analog": "Q",
-                "Triggers/R-Analog": "E",
-                "D-Pad/Up": "T",
-                "D-Pad/Down": "G",
-                "D-Pad/Left": "F",
-                "D-Pad/Right": "H",
-            }
-        )
+        keyboard_bind["Triggers/L-Analog"] = keyboard_bind["Triggers/L"]
+        keyboard_bind["Triggers/R-Analog"] = keyboard_bind["Triggers/R"]
+        # Fixed D-pad keys, minus any the player rebound to something else.
+        for target, code in [("D-Pad/Up", "KeyT"), ("D-Pad/Down", "KeyG"),
+                             ("D-Pad/Left", "KeyF"), ("D-Pad/Right", "KeyH")]:
+            if code not in keys.values():
+                keyboard_bind[target] = quote(self.key_name(code, backend))
         pad_bind = {
-            "Buttons/A": "`Button A`",
-            "Buttons/B": "`Button B`",
-            "Buttons/X": "`Button X`",
-            "Buttons/Y": "`Button Y`",
-            "Buttons/Z": "`Shoulder R`",
-            "Buttons/Start": "Start",
             "Main Stick/Up": "`Left Y+`",
             "Main Stick/Down": "`Left Y-`",
             "Main Stick/Left": "`Left X-`",
@@ -280,11 +320,11 @@ class NativeService:
             "C-Stick/Down": "`Right Y-`",
             "C-Stick/Left": "`Right X-`",
             "C-Stick/Right": "`Right X+`",
-            "Triggers/L": "`Trigger L`",
-            "Triggers/R": "`Trigger R`",
-            "Triggers/L-Analog": "`Trigger L`",
-            "Triggers/R-Analog": "`Trigger R`",
         }
+        for action in self.BUTTONS:
+            pad_bind[self.BINDING_TARGETS[action]] = quote(self.SDL_BUTTONS[buttons[action]])
+        pad_bind["Triggers/L-Analog"] = pad_bind["Triggers/L"]
+        pad_bind["Triggers/R-Analog"] = pad_bind["Triggers/R"]
         pad_bind.update(
             {
                 "D-Pad/Up": "`Pad N`",
@@ -355,7 +395,7 @@ class NativeService:
             self.process = None
             self.startup_phase = 0
             self.status_message = "Connecting your controllers…"
-            self.controllers(plan["ports"])
+            self.controllers(plan["ports"], plan.get("controls"))
             self.status_message = "Preparing your game files…"
             game = self.root / "build/native-lineup"
             stage = game.with_name("native-lineup-" + uuid.uuid4().hex)

@@ -37,10 +37,13 @@ The game opens in a fixed 960×720 floating panel on the active desktop. Closing
 it returns to the picker. No AeroSpace configuration is changed.
 
 On a fresh virtual memory card, Melee may ask for an initial confirmation: press
-**J (A)**. Move with WASD, attack with J, special with K, jump with Space/I,
-shield with Q/E, and pause with Return. The headless test exercises the initial
-confirmation through its own isolated pipe controller; normal play keeps the
-keyboard configuration and separate saves.
+**J (A)**. By default, move with WASD, attack with J, special with K, jump with
+Space/I, grab with U, shield with Q/E, smash with the arrow keys, and pause with
+Return. The Controls screen lights up each key or gamepad button as it is
+pressed and lets players rebind keys and gamepad buttons; the launcher sends
+those bindings with each launch and writes them into GCPadNew.ini. The headless
+test exercises the initial confirmation through its own isolated pipe
+controller; normal play keeps the keyboard configuration and separate saves.
 
 The native picker includes the custom characters already prepared under
 `build/characters/web-v1-*` when you package it. The current local package contains

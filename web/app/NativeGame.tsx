@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { desktop } from "@/lib/desktop";
 import { type Fighter } from "./page";
 import { plan, type Settings } from "@/lib/launch";
+import { loadBindings } from "@/lib/controls";
 export default function NativeGame({
   fighter,
   settings,
@@ -127,7 +128,7 @@ export default function NativeGame({
         };
         void poll();
         try {
-          await request("/api/native/launch", { ...launch, session });
+          await request("/api/native/launch", { ...launch, session, controls: loadBindings() });
         } finally {
           launching = false;
         }

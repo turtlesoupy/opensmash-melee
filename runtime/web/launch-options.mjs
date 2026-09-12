@@ -6,14 +6,25 @@ export function planLaunch(schema, settings, selected, roster, random = Math.ran
       !integer(settings.level, 1, 9) || !integer(settings.stocks, 1, 99) || !integer(settings.minutes, 0, 99) ||
       !Array.isArray(settings.ports) || settings.ports.length !== 4) throw Error('Invalid launch settings.');
   const kinds = {'captain-falcon':0, fox:2, link:6, luigi:7, mario:8, marth:9};
-  const devices = new Set(), used = new Map(), costumes = [];
+  const devices = new Set(), used = new Map(), costumes = [], taken = new Set([selected.slug]);
+  const pick = list => list[Math.min(list.length-1, Math.floor(random()*list.length))];
+  // A random custom opponent never repeats the player's fighter or another random pick.
+  const randomCustom = () => {
+    const pool = roster.filter(f => kinds[f.target] !== undefined && !taken.has(f.slug));
+    const row = pool.length ? pick(pool) : roster.find(f => kinds[f.target] !== undefined);
+    if (!row) return 'vanilla:' + pick(schema.fighters).id;
+    taken.add(row.slug);return row.slug;
+  };
   const ports = settings.ports.map(p => {
     if (!['keyboard','gamepad0','gamepad1','gamepad2','gamepad3','cpu','off'].includes(p.device)) throw Error('Invalid input device.');
     if (!['cpu','off'].includes(p.device)) {
       if (devices.has(p.device)) throw Error('Assign each keyboard or gamepad to only one player.');
       devices.add(p.device);
     }
-    const character = p.character === 'selected' ? selected.slug : p.character;
+    const character = p.character === 'selected' ? selected.slug
+      : p.device === 'off' ? (p.character.startsWith('random') ? 'vanilla:2' : p.character)
+      : p.character === 'random:vanilla' ? 'vanilla:' + pick(schema.fighters).id
+      : p.character === 'random' ? randomCustom() : p.character;
     const row = roster.find(f => f.slug === character);
     const fighter = character.startsWith('vanilla:') ? Number(character.slice(8)) : kinds[row?.target];
     if (!integer(fighter, 0, 25)) throw Error('Choose a valid fighter for every player.');
