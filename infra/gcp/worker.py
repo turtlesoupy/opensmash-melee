@@ -110,9 +110,7 @@ def main(args):
         run(sys.executable, "tools/desktop_artifact_manifest.py")
         artifacts = ROOT / "build/desktop-artifacts"
         names = ["build-manifest.json", "SHA256SUMS.txt"]
-        names += [
-            p.name for p in artifacts.iterdir() if p.name.endswith((".zip", ".tar.gz"))
-        ]
+        names += list(json.loads((artifacts / "build-manifest.json").read_text())["files"])
         for name in names:
             bucket.blob(
                 f'releases/{request["tag"]}/{args.platform}/{name}'

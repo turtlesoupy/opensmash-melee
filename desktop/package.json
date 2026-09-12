@@ -64,14 +64,19 @@
     ],
     "mac": {
       "target": [
-        "zip"
+        "dmg"
       ],
       "category": "public.app-category.games",
       "identity": null
     },
     "win": {
       "target": [
-        "zip"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "linux": {
@@ -83,6 +88,43 @@
     "artifactName": "OpenSmash-Melee-${version}-${os}-${arch}.${ext}",
     "asarUnpack": [
       "native/build/Release/*.node"
-    ]
+    ],
+    "nsis": {
+      "artifactName": "OpenSmash-Melee-${version}-win-${arch}-Setup.${ext}",
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": false,
+      "deleteAppDataOnUninstall": false,
+      "packElevateHelper": false,
+      "differentialPackage": false,
+      "useZip": true
+    },
+    "dmg": {
+      "title": "OpenSmash Melee ${version}",
+      "background": "installer/dmg-background.png",
+      "iconSize": 96,
+      "iconTextSize": 13,
+      "window": {
+        "width": 640,
+        "height": 400
+      },
+      "contents": [
+        {
+          "x": 170,
+          "y": 226,
+          "type": "file"
+        },
+        {
+          "x": 470,
+          "y": 226,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "publish": []
+    }
   }
 }

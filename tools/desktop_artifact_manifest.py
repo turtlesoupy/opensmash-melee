@@ -1,14 +1,16 @@
 """Identify downloadable builds without tying the app version to the engine cache."""
 
-import hashlib, json, os
+import argparse, hashlib, json, os
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
-out = root / "build/desktop-artifacts"
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--output", type=Path, default=root / "build/desktop-artifacts")
+out = parser.parse_args().output
 version = json.loads((root / "desktop/package.json").read_text())["version"]
-artifacts = sorted([*out.glob(f"OpenSmash-Melee-{version}-*.zip"), *out.glob(f"OpenSmash-Melee-{version}-*.tar.gz")])
+artifacts = sorted([*out.glob(f"OpenSmash-Melee-{version}-*.dmg"), *out.glob(f"OpenSmash-Melee-{version}-*.zip"), *out.glob(f"OpenSmash-Melee-{version}-*.tar.gz"), *out.glob(f"OpenSmash-Melee-{version}-*-Setup.exe")])
 if not artifacts:
-    raise SystemExit("No desktop archives were built")
+    raise SystemExit("No desktop distributables were built")
 manifest = {
     "version": version,
     "sourceCommit": os.environ.get("GITHUB_SHA"),
