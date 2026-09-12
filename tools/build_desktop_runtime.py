@@ -162,7 +162,7 @@ def build(inputs, out):
             "-DMODERNGEKKO_APP_BUNDLE=ON",
         ]
     run("cmake", "-S", runtime, "-B", host, "-G", "Ninja", *flags)
-    jobs = str(min(os.cpu_count() or 2, 8))
+    jobs = str(min(os.cpu_count() or 2, 48))
     run(
         "cmake",
         "--build",

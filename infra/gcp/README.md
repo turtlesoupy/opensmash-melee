@@ -35,7 +35,7 @@ still pending validation; creating infrastructure is not evidence those apps run
 
 ## Cost and cleanup
 
-- No persistent builder VMs or boot disks. Both builders are `e2-standard-4`.
+- No persistent builder VMs or boot disks. Both builders are `c3-standard-44`, sized so a fresh engine compile finishes in minutes; they still auto-delete on completion and at the max run duration.
 - A VM is deleted in the coordinator's `finally` block, with its boot disk.
 - Compute Engine independently enforces a two-hour maximum runtime and DELETE
   termination action, including if the coordinating build is interrupted.

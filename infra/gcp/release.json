@@ -7,6 +7,6 @@
   "characters": "desktop-characters-v1",
   "inputs": "desktop-inputs-v3",
   "workerServiceAccount": "release-worker@fun-opensmash-builds.iam.gserviceaccount.com",
-  "machineType": "e2-standard-4",
+  "machineType": "c3-standard-44",
   "maxRunSeconds": 7200
 }
