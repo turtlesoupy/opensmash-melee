@@ -227,6 +227,22 @@ static void initialize_requested_form(CPUState* s) {
         fprintf(stderr,"[opensmash] starting Sheik port=%u\n",port);
     }
 }
+static void report_heap_exhaustion(CPUState* s) {
+    unsigned heap=s->gpr[3], size=(s->gpr[4]+31)&~31u;
+    if(heap<0x80000000 || heap>0x817fffe0)return;
+    unsigned start=read32(s,heap+4), end=read32(s,heap+8);
+    unsigned node=read32(s,heap+12), free_bytes=0, largest=0;
+    for(unsigned count=0;count<132;count++) {
+        if(node && (node<0x80000000 || node>0x817fffe0))return;
+        unsigned next=node?read32(s,node+4):end;
+        if(next<start)return;
+        unsigned gap=next-start;free_bytes+=gap;if(gap>largest)largest=gap;
+        if(!node)break;
+        start=read32(s,node+4)+read32(s,node+8);node=read32(s,node);
+    }
+    if(largest<size)fprintf(stderr,"[opensmash] heap exhausted request=%u free=%u largest=%u bounds=%08x-%08x caller=%08x\n",
+        size,free_bytes,largest,read32(s,heap+4),end,s->lr);
+}
 static void report_assert(CPUState* s) {
     char file[161] = {0}, message[241] = {0};
     for (unsigned i = 0; i + 1 < sizeof(file); ++i) {
@@ -619,6 +635,7 @@ static const ModernGekkoModHook hooks[] = {
     RECOMP_HOOK(0x802669F4, css_frame),
     RECOMP_HOOK(0x8016D8AC, initialize_requested_form),
     RECOMP_HOOK(0x8025A998, stage_enter),
+    RECOMP_HOOK(0x80014FC8, report_heap_exhaustion),
     RECOMP_HOOK(0x80388220, report_assert),
     RECOMP_HOOK(0x80388278, report_assert),
 };

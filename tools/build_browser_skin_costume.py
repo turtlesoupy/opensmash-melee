@@ -30,7 +30,7 @@ def build(ident, compact=False):
         archive.serialize(),
         fitted,
         skel,
-        dict(profile, texture_size=256) if compact else profile,
+        dict(profile, texture_size=256, compressed_body_texture=True) if compact else profile,
     )
     target = out / ("browser-compact" if compact else "browser")
     target.mkdir(exist_ok=True)

@@ -107,12 +107,28 @@ def polygons(archive, mesh, skeleton):
     return first,batch_count
 
 
-def material(archive, image):
+def cmpr(image):
+    """Encode BC1, then convert its blocks to GX CMPR ordering and endianness."""
+    from io import BytesIO
+    width, height = image.size
+    if width % 8 or height % 8 or max(width, height) > 1024:
+        raise ValueError('GX CMPR needs dimensions divisible by 8, maximum 1024')
+    encoded = BytesIO()
+    image.convert('RGB').save(encoded, format='DDS', pixel_format='DXT1')
+    blocks = np.frombuffer(encoded.getvalue()[128:], dtype=np.uint8).reshape(height//4, width//4, 8)
+    blocks = blocks.reshape(height//8, 2, width//8, 2, 8).transpose(0, 2, 1, 3, 4).reshape(-1, 8)
+    result = blocks[:, [1, 0, 3, 2, 4, 5, 6, 7]].copy()
+    indices = result[:, 4:]
+    result[:, 4:] = ((indices & 3) << 6) | ((indices & 12) << 2) | ((indices & 48) >> 2) | ((indices & 192) >> 6)
+    return result.tobytes()
+
+
+def material(archive, image, compressed=False):
     width,height = image.size
-    pixels = archive.append(rgba8(image),32)
+    pixels = archive.append(cmpr(image) if compressed else rgba8(image),32)
     im = archive.alloc(24)
     archive.pointer(im,pixels)
-    archive.pack('HHI',im+4,width,height,6)  # GX_TF_RGBA8
+    archive.pack('HHI',im+4,width,height,14 if compressed else 6)
     tex = archive.alloc(92)
     archive.pack('II',tex+8,0,4)  # GX_TEXMAP0, GX_TG_TEX0
     archive.pack('3f',tex+28,1,1,1)
@@ -213,7 +229,7 @@ def replace_costume(archive, mesh, skeleton, profile):
     archive.pointer(selected+12,pobj)
     old_material = archive.ptr(selected+8)
     old_texture = archive.ptr(old_material+8) if old_material is not None else None
-    replacement = material(archive,mesh['image'])
+    replacement = material(archive,mesh['image'], profile.get('compressed_body_texture', False))
     texture = archive.ptr(replacement+8)
     # Fighter texture-animation tables address textures by traversal index.
     # Preserve every slot (DK has two on this material) even though only the

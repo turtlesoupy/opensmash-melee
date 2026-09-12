@@ -13,6 +13,11 @@ def build_costume(original, mesh, skeleton, profile):
     from PIL import Image
     from .archive import Archive
     from .gx import replace_costume
+    from .costume_memory import compact_body_textures, VERSION as MEMORY_VERSION
+    from .skeleton import joints
+    original, removed = compact_body_textures(original, skeleton, profile)
+    if removed:
+        skeleton = joints(Archive(original), profile['symbol'])
     size=profile.get('texture_size',256)
     while True:
         archive=Archive(original)
@@ -23,6 +28,8 @@ def build_costume(original, mesh, skeleton, profile):
         # for unusually large source meshes rather than breaking their launch.
         if len(raw)<=2*1024*1024:
             stats['texture_size']=size
+            stats['memory_layout_version']=MEMORY_VERSION
+            stats['obsolete_body_bytes_removed']=removed
             return raw,stats
         if size<=256:raise ValueError('Browser costume exceeds the 2 MiB warm-boot slot')
         size//=2

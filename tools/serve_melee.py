@@ -348,7 +348,8 @@ class Handler(BaseHTTPRequestHandler):
             if host_skin:
                 stats_path = output / skin_folder / 'stats.json'
                 stats = json.loads(stats_path.read_text()) if stats_path.is_file() else {}
-                if not (output / skin_folder / f'Pl{code}Nr.dat').is_file() or stats.get('texture_slot_version') != 1:
+                from opensmash_melee.costume_memory import VERSION as MEMORY_VERSION
+                if not (output / skin_folder / f'Pl{code}Nr.dat').is_file() or stats.get('texture_slot_version') != 1 or stats.get('memory_layout_version') != MEMORY_VERSION:
                     result = subprocess.run([sys.executable, str(ROOT / 'tools/build_browser_skin_costume.py'), ident, *(['--compact'] if compact else [])], cwd=ROOT, capture_output=True, text=True)
                     if result.returncode:
                         (output / 'browser-error.log').write_text(result.stdout + result.stderr)
