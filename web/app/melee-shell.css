@@ -398,12 +398,15 @@ select {
 .native-game-screen { position: relative; background: #000; display: flex; justify-content: center; }
 .native-game-screen canvas { display: block; width: 100%; max-height: calc(100vh - 180px); object-fit: contain; aspect-ratio: 4 / 3; outline-offset: -2px; }
 .native-game-message { position: absolute; top: 45%; left: 0; right: 0; text-align: center; }
-.is-native-fullscreen .native-game { position: fixed; inset: 0; z-index: 10000; background: #0c0905; display: flex; flex-direction: column; }
+.is-native-fullscreen .native-game { position: fixed; inset: 0; z-index: 10000; padding: 0; background: #000; display: flex; flex-direction: column; }
 .is-native-fullscreen:has(.native-game) { overflow: hidden; }
 html:has(.is-native-fullscreen .native-game) { overflow: hidden; }
 .is-native-fullscreen .intro-video-frame:has(.native-game) { contain: none; isolation: auto; overflow: visible; }
 .is-native-fullscreen .native-game-screen { flex: 1; min-height: 0; }
 .is-native-fullscreen .native-game-screen canvas { height: 100%; max-height: none; }
+.is-native-fullscreen .native-game-toolbar { position: absolute; inset: 0 0 auto; z-index: 1; margin: 0; padding: 16px; background: linear-gradient(#000c, transparent); opacity: 0; transition: opacity 150ms; }
+.is-native-fullscreen .native-game-toolbar:hover,
+.is-native-fullscreen .native-game-toolbar:focus-within { opacity: 1; }
 .is-native-fullscreen .native-game > p,
 .is-native-fullscreen .native-game > details { display: none; }
 

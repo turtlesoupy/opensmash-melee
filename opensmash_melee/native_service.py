@@ -365,6 +365,10 @@ class NativeService:
             "[Interface]\nConfirmStop = False\n[Core]\n" + execution +
             "FastDiscSpeed = True\n[Input]\nBackgroundInput = True\n"
         )
+        # Fill the fixed 960x720 transport frame. The Electron canvas already
+        # fits that 4:3 image to the display; automatic VI aspect correction here
+        # adds a second set of black bars inside the frame.
+        (config / "GFX.ini").write_text("[Settings]\nAspectRatio = 3\n")
 
     def launch(self, plan):
         with self.lock:

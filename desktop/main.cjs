@@ -141,11 +141,14 @@ else
         if (mainFrame && !inPlace) resetGame();
       });
       window.webContents.on("render-process-gone", resetGame);
-      for (const event of ["enter-full-screen", "leave-full-screen"]) {
-        window.on(event, () =>
-          window.webContents.send("melee:fullscreen-state", window.isFullScreen()),
-        );
-      }
+      const syncFullscreen = () => {
+        const fullscreen = window.isFullScreen();
+        if (process.platform !== "darwin") window.setMenuBarVisibility(!fullscreen);
+        window.webContents.send("melee:fullscreen-state", fullscreen);
+      };
+      for (const event of ["enter-full-screen", "leave-full-screen"])
+        window.on(event, syncFullscreen);
+      window.webContents.on("did-finish-load", syncFullscreen);
       window.webContents.setWindowOpenHandler(({ url }) => {
         try {
           const u = new URL(url);
