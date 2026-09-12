@@ -9,6 +9,31 @@ from unittest.mock import patch
 from opensmash_melee.web_game import GameSetup, ISO_SHA256
 
 class WebGameTests(unittest.TestCase):
+    def test_clear_forgets_setup_across_restart_and_preserves_files(self):
+        with tempfile.TemporaryDirectory() as d:
+            setup = GameSetup(d)
+            setup.game.mkdir(parents=True)
+            asset = setup.game / 'data'
+            asset.write_bytes(b'game')
+            (setup.cache / 'verified.json').write_text('{}')
+            setup.ready = True
+            self.assertEqual(setup.clear()['state'], 'missing')
+            self.assertFalse(setup.ready)
+            self.assertEqual(asset.read_bytes(), b'game')
+            reopened = GameSetup(d)
+            reopened.restore()
+            self.assertFalse(reopened.ready)
+            self.assertEqual(reopened.status()['state'], 'missing')
+
+    def test_clear_rejects_active_setup(self):
+        with tempfile.TemporaryDirectory() as d:
+            setup = GameSetup(d)
+            setup.ready = True
+            with setup.lock:
+                with self.assertRaisesRegex(ValueError, 'Wait for game setup'):
+                    setup.clear()
+            self.assertTrue(setup.ready)
+
     def test_wrong_size_does_not_start_or_touch_game(self):
         with tempfile.TemporaryDirectory() as d:
             setup=GameSetup(d)

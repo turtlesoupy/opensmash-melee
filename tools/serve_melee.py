@@ -233,6 +233,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self.local_ui_request():
             return self.send_error(403)
+        if self.path == '/api/setup/clear':
+            try:
+                if NATIVE:
+                    NATIVE.stop()
+                return self.json(SETUP.clear())
+            except (ValueError, OSError) as error:
+                return self.json({'error': str(error)}, 409)
         if self.path.startswith('/api/native/') and NATIVE:
             try:
                 length=int(self.headers.get('Content-Length','0'))

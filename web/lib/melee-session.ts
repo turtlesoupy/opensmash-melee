@@ -11,6 +11,11 @@ function updateDisc(status:DiscSetup){discSetup=status;for(const listener of dis
 export function subscribeLocalDisc(listener:(status:DiscSetup)=>void){
  discListeners.add(listener);listener(discSetup);return()=>{discListeners.delete(listener);};
 }
+export function clearLocalDisc(){
+ localDisc=undefined;
+ standby?.cancel();standby?.worker.terminate();standby=undefined;
+ updateDisc({state:'missing',ready:false,message:'Choose your Melee disc.'});
+}
 // The old upload/extraction path is a loopback-only comparison tool.
 export const usesLocalDisc=()=>!(['localhost','127.0.0.1','[::1]'].includes(location.hostname)&&new URLSearchParams(location.search).get('disc')==='server');
 export async function selectLocalDisc(file:File){

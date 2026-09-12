@@ -31,6 +31,18 @@ class GameSetup:
     def status(self):
         return {**self.state, 'ready': self.ready}
 
+    def clear(self):
+        """Forget setup without deleting the user's disc or extracted files."""
+        if not self.lock.acquire(blocking=False):
+            raise ValueError('Wait for game setup to finish before clearing the disc.')
+        try:
+            (self.cache / 'verified.json').unlink(missing_ok=True)
+            self.ready = False
+            self.progress('missing', 'Choose your Melee USA 1.02 ISO or GCM to get started.')
+            return self.status()
+        finally:
+            self.lock.release()
+
     def progress(self, state, message, progress=None):
         self.state = {'state': state, 'message': message, 'progress': progress}
 

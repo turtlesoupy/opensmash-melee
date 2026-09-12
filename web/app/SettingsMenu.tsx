@@ -17,7 +17,7 @@ export default function SettingsMenu({value,onChange,roster,target,onTarget,onRe
    <h2 className="settings-subheading">{titles[page]}</h2>
    {page==='gameplay'&&<LaunchSettings section="gameplay" value={value} onChange={onChange} roster={roster}/>}
    {page==='controllers'&&<><p className="settings-subtitle">Connect a controller for multiplayer.</p><LaunchSettings section="controllers" value={value} onChange={onChange} roster={roster}/></>}
-   {page==='disc'&&<BootScreen onReady={onReady}/>}
+   {page==='disc'&&<BootScreen onReady={onReady} onCleared={onClose}/>}
    {page==='controls'&&<Controls/>}
    {page==='roster'&&<label className="moveset-filter">Melee moveset<select value={target} onChange={e=>onTarget(e.target.value)}><option value="all">All fighters</option>{Object.entries(names).map(([key,name])=><option key={key} value={key}>{name}</option>)}</select></label>}
    <button className="settings-menu-button settings-back-button" onClick={()=>setPage('main')}>Back</button>

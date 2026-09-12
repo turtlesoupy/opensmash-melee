@@ -248,7 +248,7 @@ export default function Home() {
           {dialog === "Create" && <ImportCharacter onImported={fighter=>setRoster(previous=>[fighter,...previous.filter(f=>f.slug!==fighter.slug)])} onPlay={fighter=>{setDialog(null);choose(fighter);}}/>}
           {dialog === "Settings" && (
             <SettingsMenu value={settings} onChange={setSettings} roster={roster}
-              target={target} onTarget={setTarget} onReady={setGameReady} onClose={()=>setDialog(null)} />
+              target={target} onTarget={setTarget} onReady={ready=>{setGameReady(ready);if(!ready)setSelected(null);}} onClose={()=>setDialog(null)} />
           )}
           {dialog === "Controls" && <Controls />}
           {dialog === "About" && (

@@ -1,14 +1,15 @@
 import {useEffect,useRef,useState} from 'react';
 import {extractDiscZip} from '@/lib/disc-archive';
 import {desktop} from '@/lib/desktop';
-import {subscribeLocalDisc,selectLocalDisc,usesLocalDisc} from '@/lib/melee-session';
+import {subscribeLocalDisc,selectLocalDisc,clearLocalDisc,usesLocalDisc} from '@/lib/melee-session';
 type Setup={state:string;ready:boolean;message:string;progress?:number};
-export default function BootScreen({onReady,showReadyPrompt=false}:{onReady:(ready:boolean)=>void;showReadyPrompt?:boolean}) {
+export default function BootScreen({onReady,showReadyPrompt=false,onCleared}:{onReady:(ready:boolean)=>void;showReadyPrompt?:boolean;onCleared?:()=>void}) {
  const [setup,setSetup]=useState<Setup>({state:'checking',ready:false,message:'Checking local game setup…'});
  const [error,setError]=useState(''),[connectionError,setConnectionError]=useState(''),[transfer,setTransfer]=useState<number|null>(null);
  const [extracting,setExtracting]=useState<number|null>(null);
  const archiveCleanup=useRef<(()=>Promise<void>)|undefined>(undefined);
  useEffect(()=>{const cleanup=(event:PageTransitionEvent)=>{if(!event.persisted)void archiveCleanup.current?.();};window.addEventListener('pagehide',cleanup);return()=>window.removeEventListener('pagehide',cleanup);},[]);
+ const [clearing,setClearing]=useState(false);
  const input=useRef<HTMLInputElement>(null),request=useRef<XMLHttpRequest|null>(null),ready=useRef(onReady);ready.current=onReady;
  useEffect(()=>{
   if(!desktop()&&usesLocalDisc()){
@@ -68,6 +69,8 @@ export default function BootScreen({onReady,showReadyPrompt=false}:{onReady:(rea
    {(error||connectionError)&&<p role="alert">{error||connectionError}</p>}
    <input ref={input} type="file" accept=".iso,.gcm,.zip" aria-label="Choose Melee ISO, GCM or ZIP" hidden onChange={e=>{select(e.target.files?.[0]);e.target.value='';}}/>
    <button className="boot-action" disabled={extracting!==null||busy&&transfer===null&&!error&&!connectionError||transfer!==null} onClick={async()=>{if(desktop()){try{setError('');await desktop()!.chooseDisc();}catch(e){setError((e as Error).message);}}else input.current?.click();}}>{setup.ready?'Choose another disc':'Choose Melee ISO / GCM / ZIP'}</button>
+   {onCleared&&setup.ready&&<button className="boot-action" disabled={busy} onClick={()=>void clearDisc()}>{clearing?'Clearing…':'Clear disc'}</button>}
+   {onCleared&&setup.ready&&<small>Clear disc returns to setup. Your original disc file stays on this computer.</small>}
    {transfer!==null&&<button className="retro-site-link" onClick={()=>request.current?.abort()}>Cancel transfer</button>}
    <small>{!desktop()&&usesLocalDisc()?'Your disc is read directly by this browser and is never uploaded. Select it again after refreshing the page.':'Your disc stays on this computer. Choose your Melee USA 1.02 disc once to get started.'}</small>
   </div>
