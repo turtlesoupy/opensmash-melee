@@ -71,7 +71,12 @@
     },
     "win": {
       "target": [
-        "zip"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "linux": {
@@ -83,6 +88,17 @@
     "artifactName": "OpenSmash-Melee-${version}-${os}-${arch}.${ext}",
     "asarUnpack": [
       "native/build/Release/*.node"
-    ]
+    ],
+    "nsis": {
+      "artifactName": "OpenSmash-Melee-${version}-win-${arch}-Setup.${ext}",
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": false,
+      "deleteAppDataOnUninstall": false,
+      "packElevateHelper": false
+    }
   }
 }

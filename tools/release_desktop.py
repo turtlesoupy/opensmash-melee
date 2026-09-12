@@ -19,6 +19,8 @@ def run(*args, capture=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--artifacts", type=Path, default=ROOT / "build/desktop-artifacts",
+                        help="Output directory; use an empty directory for candidate builds")
     parser.add_argument("--commit", help="Exact release SHA; defaults to freshly fetched origin/main")
     parser.add_argument("--inputs", type=Path, default=ROOT / "build/desktop-inputs/native-inputs-v3.tar.gz")
     parser.add_argument("--characters", type=Path, default=ROOT / "build/desktop-inputs/characters.tar.gz")
@@ -37,7 +39,8 @@ def main():
     if os.environ.get("OPENSMASH_RELEASE_SYNCED") != expected:
         os.environ["OPENSMASH_RELEASE_SYNCED"] = expected
         run(sys.executable, Path(__file__), "--commit", expected,
-            "--inputs", args.inputs.resolve(), "--characters", args.characters.resolve())
+            "--inputs", args.inputs.resolve(), "--characters", args.characters.resolve(),
+            "--artifacts", args.artifacts.resolve())
         return
     for path in (args.inputs, args.characters):
         if not path.is_file():
@@ -58,20 +61,21 @@ def main():
     run(sys.executable, "-m", "unittest", "discover", "-s", "tests")
     run("node", "--test", "tests/launch_options.test.mjs")
     run(npm, "--prefix", "desktop", "ci")
-    run(npm, "--prefix", "desktop", "run", "dist")
+    run(npm, "--prefix", "desktop", "run", "dist", "--",
+        "--config.directories.output=" + str(args.artifacts.resolve()))
     if sys.platform == "darwin":
         folder = "mac-arm64" if platform.machine() == "arm64" else "mac"
-        resources = ROOT / "build/desktop-artifacts" / folder / "OpenSmash Melee.app/Contents/Resources"
+        resources = args.artifacts.resolve() / folder / "OpenSmash Melee.app/Contents/Resources"
     else:
         folder = "win-unpacked" if os.name == "nt" else "linux-unpacked"
-        resources = ROOT / "build/desktop-artifacts" / folder / "resources"
+        resources = args.artifacts.resolve() / folder / "resources"
     run(sys.executable, "tools/verify_desktop_package.py", resources)
     if run("git", "rev-parse", "HEAD", capture=True).stdout.strip() != commit or run(
         "git", "status", "--porcelain", "--untracked-files=no", capture=True
     ).stdout.strip():
         raise SystemExit("Source changed during the build; rebuild before releasing.")
-    run(sys.executable, "tools/desktop_artifact_manifest.py")
-    print(f"Verified local release from {commit}: build/desktop-artifacts", flush=True)
+    run(sys.executable, "tools/desktop_artifact_manifest.py", "--output", args.artifacts.resolve())
+    print(f"Verified local release from {commit}: {args.artifacts.resolve()}", flush=True)
 
 
 if __name__ == "__main__":
