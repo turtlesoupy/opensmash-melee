@@ -5,12 +5,15 @@ import type {Fighter} from '../app/page';
 export {schema};
 export type Settings=typeof schema.defaults;
 export const defaults=()=>structuredClone(schema.defaults);
-// The alpha shipped with a single Peach CPU as the default lineup; saved copies of that
-// lineup follow the new random default rather than pinning players to the old one.
-const legacyPorts=JSON.stringify([{device:'keyboard',character:'selected'},{device:'cpu',character:'vanilla:12'},{device:'off',character:'vanilla:2'},{device:'off',character:'vanilla:9'}]);
+// The alpha shipped with a single Peach CPU on Battlefield as the default; saved copies of
+// those opponents follow the new random lineup while keeping player 1's own controller.
+const legacyOpponents=JSON.stringify([{device:'cpu',character:'vanilla:12'},{device:'off',character:'vanilla:2'},{device:'off',character:'vanilla:9'}]);
 export function loadSettings():Settings {try{
  const saved=JSON.parse(preferences.getItem('melee-launch-v1')||'{}');
- if(JSON.stringify(saved.ports)===legacyPorts)delete saved.ports;
+ if(Array.isArray(saved.ports)&&JSON.stringify(saved.ports.slice(1))===legacyOpponents){
+  saved.ports=[saved.ports[0],...defaults().ports.slice(1)];
+  if(saved.stage===31)delete saved.stage;
+ }
  return {...defaults(),...saved};
 }catch{return defaults();}}
 export function plan(settings:Settings,selected:Fighter,roster:Fighter[]){return planLaunch(schema,settings,selected,roster);}
