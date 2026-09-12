@@ -58,12 +58,33 @@ EMSCRIPTEN_KEEPALIVE void opensmash_configure_launch(int mode,int stage,int leve
 #endif
 
 static int requested = 0, prepared = 0, classic_prepared = 0, launched = 0, css_frames = 0;
+static int boot_card_seen = 0, boot_card_active = 0;
 
 static unsigned read32(CPUState* s, unsigned address) {
     return (unsigned)moderngekko_mod_read(s, address, 4);
 }
 static void write8(CPUState* s, unsigned address, unsigned value) {
     moderngekko_mod_write(s, address, value, 1);
+}
+static void boot_card_enter(CPUState* s) {
+    (void)s;
+    boot_card_active = requested && !boot_card_seen;
+    boot_card_seen = 1;
+}
+static void boot_card_exit(CPUState* s) {(void)s;boot_card_active=0;}
+static void boot_card_input(CPUState* s) {
+    if(!boot_card_active)return;
+    /* GALE01 gm_Scene_MemCard_OnFrame: state 5 asks to create a missing
+     * save; state 7 acknowledges successful creation. Let Melee initialize
+     * and persist its own data. Never approve formatting or error dialogs. */
+    unsigned state=read32(s,0x80480DA8+0x14);
+    if(state==5 || state==7) {
+        static unsigned reported;
+        if(!(reported&(1u<<state))){reported|=1u<<state;fprintf(stderr,"[opensmash] fresh save %s\n",state==5?"creating":"created");}
+        write8(s,0x80480DA8+0x1c,0);
+        for(unsigned port=0;port<4;port++)
+            moderngekko_mod_write(s,0x804C20BC+port*0x44+8,0x100,4);
+    }
 }
 static int setting(const char* name, int fallback, int minimum, int maximum) {
     const char* raw = getenv(name);
@@ -548,6 +569,9 @@ static void damage_emblem(CPUState* s) {
 #include "character_select.h"
 
 static const ModernGekkoModHook hooks[] = {
+    RECOMP_HOOK(0x801B0264, boot_card_enter),
+    RECOMP_HOOK(0x801B0304, boot_card_exit),
+    RECOMP_HOOK(0x801AF568, boot_card_input),
     RECOMP_HOOK(0x802640A0, css_enter_identity),
     RECOMP_HOOK(0x80266D70, css_exit_identity),
     RECOMP_HOOK_RETURN(0x80266D70, css_exited_identity),

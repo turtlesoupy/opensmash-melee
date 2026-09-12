@@ -19,6 +19,11 @@ test('reject duplicate controllers, invalid settings and one-player FFA',()=>{
  s.stage=31;s.level=10;assert.throws(()=>planLaunch(schema,s,roster[0],roster),/Invalid/);
 });
 test('random stage never selects unused stage IDs',()=>{
- const s=fresh();s.stage=-1;
+ const s=fresh();assert.equal(s.stage,-1);
  for(let i=0;i<100;i++){const p=planLaunch(schema,s,roster[0],roster,()=>i/100);assert(schema.stages.some(x=>x.id===p.stage));assert(![-1,21,26].includes(p.stage));}
+});
+
+test('an explicitly saved stage overrides the random default',()=>{
+ const s={...fresh(),stage:31};
+ assert.equal(planLaunch(schema,s,roster[0],roster,()=>0).stage,31);
 });

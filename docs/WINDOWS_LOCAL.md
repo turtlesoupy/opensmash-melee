@@ -237,3 +237,15 @@ refreshing during combat and during preparation. Mono/stereo golden tests and
 comparisons with the original encoder preserve audio output, including silence,
 clipping, predictor ties, and partial blocks. These changes do not alter the
 native engine or its execution policy and also apply to browser asset staging.
+
+VS selection review found two JIT dispatch bugs: branch following could skip a
+hook inside a compiled block, and a cold block-cache miss could invoke an
+observational hook twice. `zzzz-mod-boundaries.patch` preserves hook boundaries
+and executes the first guest instruction once after an observational callback.
+An actual Windows run initialized the CSS registry once, displayed Obama as P1,
+and processed four scripted controller arrow presses as pages 0, 1, 0, 1.
+A fresh profile created its own 90,176-byte GCI save without input; the next
+launch reused it. File → Settings and the existing refresh cleanup checks passed.
+The updated runner measured 59.98 FPS over 60 seconds with zero warmup, at least
+59 frames in every one-second window, and a clean exit. Runner SHA-256:
+`77c097c14eb184cae55ddc03e41e9f4be36e95cbdeb59478f98c4dcf97afd995`.

@@ -53,6 +53,7 @@ export default function Home() {
     ),
     [error, setError] = useState("");
   const [dialog, setDialog] = useState<"Settings" | "Controls" | "About" | "Create" | null>(null);
+  useEffect(() => desktop()?.onOpenSettings(() => setDialog("Settings")), []);
   const frame = useRef<HTMLDivElement>(null),
     launchId = useRef(0);
   useEffect(() => {

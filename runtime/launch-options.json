@@ -257,7 +257,7 @@
   ],
   "defaults": {
     "mode": 0,
-    "stage": 31,
+    "stage": -1,
     "level": 5,
     "stocks": 4,
     "minutes": 8,

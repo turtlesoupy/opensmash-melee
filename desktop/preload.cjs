@@ -60,6 +60,11 @@ contextBridge.exposeInMainWorld(
     },
     protocol: 1,
     embedded: true,
+    onOpenSettings: (callback) => {
+      const listener = () => callback();
+      ipcRenderer.on("melee:open-settings", listener);
+      return () => ipcRenderer.removeListener("melee:open-settings", listener);
+    },
     beginGame: (session) => ipcRenderer.invoke("melee:begin-game", session),
     setGameActive: (active) => {
       surfaceActive = active === true;

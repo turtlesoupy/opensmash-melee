@@ -50,7 +50,7 @@ class NativeService:
             ("mod loaded:", "Opening your game…"),
             ("[staticrecomp] core init", "Loading game data…"),
             ("[staticrecomp] module loaded:", "Loading fighters and stage…"),
-            ("[staticrecomp] execution=", "Booting Melee… Press J if a memory-card prompt appears."),
+            ("[staticrecomp] execution=", "Booting Melee…"),
             ("[opensmash] launch mode=", "Preparing your match…"),
             ("[opensmash] preparing first scene", "Getting the first scene ready…"),
             ("[opensmash] destination ready", "Game is running."),

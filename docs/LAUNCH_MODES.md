@@ -2,6 +2,15 @@
 
 Both launchers use `runtime/launch-options.json` and the same native/Wasm scene
 hooks in `runtime/mods/launch_match.c`. Settings persist between launches.
+New settings default to a random stage; a saved stage choice takes precedence.
+The desktop's File → Settings menu (app menu on macOS), or Ctrl/Cmd+comma,
+opens the same settings dialog as the launcher navigation.
+
+On first boot, Melee creates its own save through the normal missing-save flow
+without requiring controller input. The save persists in the local user profile.
+Only the create-save prompt and its success acknowledgement are automatic;
+formatting, damaged cards, other errors, and later card-menu visits retain their
+normal handling. Existing saves are loaded normally.
 
 | Mode | Destination | Settings |
 |---|---|---|

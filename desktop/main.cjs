@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell, session, screen } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell, session, screen, Menu } = require("electron");
 const { spawn } = require("node:child_process");
 const { randomBytes } = require("node:crypto");
 const fs = require("node:fs"),
@@ -109,6 +109,17 @@ else
         },
       });
       saveWindowState = placement.track(window);
+      const settingsItem = {
+        label: "Settings…", accelerator: "CmdOrCtrl+,",
+        click: () => window.webContents.send("melee:open-settings"),
+      };
+      Menu.setApplicationMenu(Menu.buildFromTemplate([
+        ...(process.platform === "darwin" ? [{ role: "appMenu", submenu: [
+          { role: "about" }, { type: "separator" }, settingsItem,
+          { type: "separator" }, { role: "services" }, { role: "hide" }, { role: "quit" },
+        ] }] : [{ label: "File", submenu: [settingsItem, { type: "separator" }, { role: "quit" }] }]),
+        { role: "editMenu" }, { role: "viewMenu" }, { role: "windowMenu" },
+      ]));
       surface?.attach(window);
       const lifecycle = require("./game-lifecycle.cjs")(async (route, body) => {
         const response = await fetch(origin + route, {

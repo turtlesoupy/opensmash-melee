@@ -1,6 +1,7 @@
 export type DesktopBridge = {
   protocol: 1;
   embedded: boolean;
+  onOpenSettings: (callback: () => void) => () => void;
   beginGame: (session: string) => Promise<unknown>;
   setGameActive: (active: boolean) => void;
   input: (code: string | null, down: boolean) => void;

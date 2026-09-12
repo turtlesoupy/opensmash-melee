@@ -40,6 +40,12 @@ outer overrides early. No costume heap pointers
 are retained across scenes. Audio identity is retained per announcer track until
 the asynchronous sound script reaches the synthesizer.
 
+JIT compilation must end a block before a mod hook, even when branch following
+would inline that function into its caller. The native patch also executes an
+observational hook's first guest instruction once before returning to JIT code;
+otherwise a cache miss can dispatch the same hook twice. These boundaries are
+required for CSS initialization, arrow presses, and balanced render overrides.
+
 The desktop service stages these files in its private lineup directory. The
 browser prepares them through `/api/character-select`, installs them before
 releasing the first-scene barrier, and updates their virtual-disc file lengths.

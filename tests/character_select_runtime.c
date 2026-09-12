@@ -1,4 +1,5 @@
 /* Exercise the actual mod callbacks against bounded guest RAM. */
+#undef NDEBUG
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +42,25 @@ int main(void){
  write8(&s,css_player(&s,0),8);write8(&s,css_player(&s,0)+3,1);
  write8(&s,css_player(&s,1),8);write8(&s,css_player(&s,1)+3,2);
  css_enter_identity(&s);assert(css_count==2&&css_selected[0]==1&&css_selected[1]==2&&css_page==1);
+ /* Controller A over each arrow moves exactly one page and preserves the
+  * confirmed selection. Restore the input after the normal cursor callback. */
+ s.gpr[3]=0x81070000;w(&s,s.gpr[3]+0x2c,0x81070100);
+ write8(&s,0x81070104,0);write8(&s,0x81070106,0);write8(&s,0x804D6CF6,0);
+ w(&s,0x8107010c,0x41cc0000);w(&s,0x81070110,0x40200000); /* x=25.5 y=2.5 */
+ w(&s,0x804C20C4,0x100);css_cursor_begin(&s);
+ assert(css_page==2&&css_selected[0]==1&&rd(&s,0x804C20C4,4)==0);
+ css_cursor_end(&s);assert(rd(&s,0x804C20C4,4)==0x100);
+ w(&s,0x8107010c,0xc1d80000);css_cursor_begin(&s); /* x=-27 */
+ assert(css_page==1&&css_selected[0]==1);css_cursor_end(&s);
+ /* A fresh save is created through Melee's normal dialog. Error/format
+  * prompts and later card-menu visits never receive automatic confirmation. */
+ requested=1;boot_card_seen=0;boot_card_enter(&s);
+ for(unsigned state=0;state<=20;state++){
+  w(&s,0x80480DBC,state);w(&s,0x804C20C4,0);boot_card_input(&s);
+  assert(rd(&s,0x804C20C4,4)==((state==5||state==7)?0x100:0));
+ }
+ boot_card_exit(&s);boot_card_enter(&s);w(&s,0x80480DBC,5);w(&s,0x804C20C4,0);
+ boot_card_input(&s);assert(rd(&s,0x804C20C4,4)==0);
  /* Recursive DispAll returns must not restore the outer CSS overrides early. */
  css_draw_write(&s,0x81040000,999);s.lr=0x80370a00;css_draw_root_end(&s);assert(rd(&s,0x81040000,4)==999);
  s.lr=0x803910a0;css_draw_root_end(&s);assert(rd(&s,0x81040000,4)==123);
