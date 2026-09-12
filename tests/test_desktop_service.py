@@ -150,6 +150,29 @@ class DesktopServiceTests(unittest.TestCase):
         process.terminate.assert_not_called()
         process.kill.assert_called_once()
 
+    def test_replacement_cancels_preparation_and_stale_cleanup_is_harmless(self):
+        first = "00000000-0000-0000-0000-000000000001"
+        second = "00000000-0000-0000-0000-000000000002"
+        self.service.begin(first)
+        self.service.begin(second)
+        self.service.stop(first)
+        self.assertEqual(self.service.session, second)
+        self.assertNotIn(second, self.service.cancelled)
+        with self.assertRaisesRegex(ValueError, "cancelled"):
+            self.service.launch({**self.plan, "session": first})
+
+    def test_reload_cancels_a_reserved_launch(self):
+        sid = "00000000-0000-0000-0000-000000000001"
+        self.service.begin(sid)
+        self.service.stop()
+        with self.assertRaisesRegex(ValueError, "cancelled"):
+            self.service.launch({**self.plan, "session": sid})
+
+    def test_keyboard_launch_does_not_probe_gamepads(self):
+        with patch("opensmash_melee.native_service.subprocess.run") as probe:
+            self.service.controllers(self.plan["ports"])
+        probe.assert_not_called()
+
     def test_packed_ports_are_derived_not_trusted(self):
         self.plan["packedPorts"] = [999] * 4
         packed, _ = self.service.validate(self.plan)

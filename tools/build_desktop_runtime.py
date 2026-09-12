@@ -30,7 +30,7 @@ def build(inputs, out):
     apply_native_patches(runtime, [ROOT / "runtime/patches/native" / name for name in [
         "keyboard-no-beep.patch", "zz-electron-embedded.patch", "windows-sdk-compat.patch",
         "zz-graceful-stop.patch",
-        "zz-performance.patch", "zz-windows-jit.patch"
+        "zz-performance.patch", "zz-windows-jit.patch", "zz-startup.patch", "zzz-jit-memory.patch", "zz-startup-cancel.patch"
     ]])
     host = ROOT / "build/desktop-runtime-host"
     module = ROOT / "build/desktop-runtime-module"

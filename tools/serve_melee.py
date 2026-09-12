@@ -52,12 +52,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def json(self, value, status=200):
         body = json.dumps(value).encode()
-        self.send_response(status)
-        self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', str(len(body)))
-        self.end_headers()
-        if self.command != 'HEAD':
-            self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            if self.command != 'HEAD':
+                self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # Reloading abandons in-flight requests; session cleanup is owned
+            # by the desktop main process and must still finish normally.
+            pass
 
     def file(self, path):
         size = path.stat().st_size
@@ -172,6 +177,7 @@ class Handler(BaseHTTPRequestHandler):
                 length=int(self.headers.get('Content-Length','0'))
                 if not 0<length<=65536:raise ValueError('Invalid request size')
                 body=json.loads(self.rfile.read(length))
+                if self.path=='/api/native/begin':return self.json(NATIVE.begin(body.get('session')))
                 if self.path=='/api/native/launch':return self.json(NATIVE.launch(body))
                 if self.path=='/api/native/shutdown':
                     SETUP.cancel()
@@ -247,7 +253,7 @@ class Handler(BaseHTTPRequestHandler):
                 if result.returncode:
                     return self.json({'error': 'This character needs a retarget correction before it can enter combat.'}, 422)
             from tools.upgrade_character_surfaces import upgrade
-            upgrade(ident)
+            upgrade(ident, CHARACTERS / slug)
         host_skin = parse_qs(urlsplit(self.path).query).get('skin') == ['host']
         compact = NATIVE is not None and query.get('compact') == ['1']
         skin_folder = 'browser-compact' if compact else 'browser'

@@ -14,6 +14,7 @@ def summarize_presentations(samples, start, duration, observed_until):
         "measurementComplete": observed_until >= start + duration,
         "measuredFps": len(stable) / duration,
         "measurementDuration": duration,
+        "framesPerSecond": windows,
         "minOneSecondFrames": min(windows) if windows else None,
         "secondsBelow58Frames": sum(count < 58 for count in windows),
     }
@@ -28,7 +29,7 @@ def main():
     p.add_argument('--module', type=Path)
     p.add_argument('--single-core', action='store_true')
     p.add_argument('--phase', action='store_true')
-    p.add_argument('--warmup', type=float, default=15)
+    p.add_argument('--warmup', type=float, default=0)
     p.add_argument('--measure', type=float, default=60)
     p.add_argument('--timeout', type=float, default=180)
     a = p.parse_args()
@@ -77,6 +78,7 @@ def main():
             except subprocess.TimeoutExpired:pass
         process.kill()
         return process.wait(timeout=10)
+    next_log_check = 0
     combat_at = None
     measured_end = None
     started = time.perf_counter()
@@ -87,7 +89,8 @@ def main():
         try:
             while time.perf_counter() - started < a.timeout and process.poll() is None:
                 elapsed = time.perf_counter() - started
-                if combat_at is None and int(elapsed * 10) % 10 == 0:
+                if combat_at is None and elapsed >= next_log_check:
+                    next_log_check = elapsed + 0.1
                     if '[opensmash] combat started' in (out / 'game.log').read_text(errors='replace'):
                         combat_at = elapsed
                         measured_end = combat_at + a.warmup + a.measure

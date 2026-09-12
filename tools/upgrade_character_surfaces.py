@@ -9,7 +9,7 @@ from opensmash_melee.__main__ import ROOT, atomic_write, digest
 from opensmash_melee.surfaces import SURFACE_VERSION, refine_profile
 
 
-def upgrade(ident):
+def upgrade(ident, library_source=None):
     from opensmash_melee.archive import Archive
     from opensmash_melee.glb import GLB
     from opensmash_melee.skeleton import joints
@@ -20,7 +20,7 @@ def upgrade(ident):
         raise ValueError('Invalid character identifier')
     output=ROOT/'build/characters'/ident;profile_path=output/'profile.json'
     old=json.loads(profile_path.read_text())
-    if old.get('surface_version',0)>=SURFACE_VERSION:return upgrade_presentation(ident)
+    if old.get('surface_version',0)>=SURFACE_VERSION:return upgrade_presentation(ident, library_source)
     source=ROOT/'assets/characters'/ident/'rigged.glb'
     if old.get('source_glb_sha256')!=digest(source):raise ValueError('Cached source hash mismatch')
     native=list(output.glob('Pl*Nr.dat'))
@@ -57,10 +57,10 @@ def upgrade(ident):
     for path,raw in replacements.items():
         if path!=profile_path:atomic_write(path,raw)
     atomic_write(profile_path,profile_bytes)
-    upgrade_presentation(ident)
+    upgrade_presentation(ident, library_source)
     return True
 
-def upgrade_presentation(ident):
+def upgrade_presentation(ident, library_source=None):
     from opensmash_melee.presentation import panel, import_stencil, VERSION
     import hashlib, os
     character=ROOT/"assets/characters"/ident
@@ -69,7 +69,10 @@ def upgrade_presentation(ident):
         # Existing imports predate stencil preservation. Match the source art
         # hash, never the retarget/base-fighter name.
         expected=digest(character/"emblem_raw.png")
-        for source in sorted(library.glob("*/emblem_raw.png")):
+        direct = Path(library_source)/"emblem_raw.png" if library_source else None
+        candidates = ([direct] if direct and direct.is_file() and digest(direct)==expected
+                      else sorted(library.glob("*/emblem_raw.png")))
+        for source in candidates:
             if digest(source)==expected and import_stencil(source.parent,character):
                 manifest_path=character/"manifest.json"
                 manifest=json.loads(manifest_path.read_text())

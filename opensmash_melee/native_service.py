@@ -21,10 +21,11 @@ class NativeService:
         self.cancelled = set()
         self.process = None
         self.stop_file = None
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self.log = self.root / "build/native-session.log"
         self.user = self.root / "build/native-user"
         self.status_message = "Ready."
+        self.startup_phase = 0
         if self.manifest.get("protocol") != 1:
             raise ValueError("Incompatible native runtime protocol")
         for key in ["runner", "module", "controllers"]:
@@ -45,10 +46,20 @@ class NativeService:
             with self.log.open("rb") as stream:
                 stream.seek(max(0, self.log.stat().st_size - 16000))
                 text = stream.read().decode(errors="replace")
-        ready = (
-            "[opensmash] destination ready" in text
-            or "[opensmash] combat started" in text
-        )
+        phases = [
+            "Checking game files...",
+            "Initializing graphics and loading shaders...",
+            "Booting Melee... Press J if a memory-card prompt appears.",
+            "Loading fighters and stage...",
+        ]
+        for index, marker in enumerate([
+            "mod loaded:", "[staticrecomp] execution=", "[opensmash] launch fighter=",
+            "[opensmash] destination ready", "[opensmash] combat started",
+        ], 1):
+            if marker in text and running:
+                self.startup_phase = max(self.startup_phase, min(index, 4))
+        ready = self.startup_phase == 4
+        starting = phases[min(self.startup_phase, 3)]
         return {
             "protocol": 1,
             "session": self.session,
@@ -58,7 +69,7 @@ class NativeService:
             "message": (
                 ("Game is running." if os.environ.get("OPENSMASH_INPUT_FILE") else "Game is running in its native window.")
                 if running and ready
-                else "Starting Melee…" if running else self.status_message
+                else starting if running else self.status_message
             ),
         }
 
@@ -72,6 +83,8 @@ class NativeService:
                 self.cancelled.add(session)
                 if session != self.session:
                     return self.status()
+            if self.session:
+                self.cancelled.add(self.session)
             if self.process and self.process.poll() is None:
                 if self.stop_file is not None:
                     self.stop_file.touch()
@@ -87,6 +100,19 @@ class NativeService:
                 self.stop_file = None
             self.status_message = "Game closed."
         return self.status()
+
+    def begin(self, session):
+        """Reserve the next launch before character preparation starts."""
+        if not isinstance(session, str) or not re.fullmatch(r"[a-f0-9-]{36}", session):
+            raise ValueError("Invalid launch session")
+        with self.lock:
+            if session in self.cancelled:
+                raise ValueError("Launch was cancelled")
+            self.stop()
+            self.session = session
+            self.process = None
+            self.status_message = "Preparing your character…"
+            return self.status()
 
     def validate(self, plan):
         def integer(x, lo, hi):
@@ -189,10 +215,12 @@ class NativeService:
             )
         )
         helper = self.runtime / self.manifest["controllers"]
-        result = subprocess.run(
-            [str(helper)], capture_output=True, text=True, timeout=10
-        )
-        pads = [line for line in result.stdout.splitlines() if line.startswith("SDL/")]
+        pads = []
+        if any(p["device"].startswith("gamepad") for p in ports):
+            result = subprocess.run(
+                [str(helper)], capture_output=True, text=True, timeout=10
+            )
+            pads = [line for line in result.stdout.splitlines() if line.startswith("SDL/")]
         keyboard_bind = {
             "Buttons/A": "J",
             "Buttons/B": "K",
@@ -319,7 +347,9 @@ class NativeService:
             if self.process and self.process.poll() is None:
                 raise ValueError("Close the current game first")
             packed, costumes = self.validate(plan)
+            self.status_message = "Setting up controllers..."
             self.controllers(plan["ports"])
+            self.status_message = "Preparing game files..."
             game = self.root / "build/native-lineup"
             stage = game.with_name("native-lineup-" + uuid.uuid4().hex)
 
@@ -382,6 +412,7 @@ class NativeService:
                 "--mods",
                 str(self.runtime / "Mods"),
             ]
+            self.startup_phase = 0
             with self.log.open("w") as output:
                 self.process = subprocess.Popen(
                     args,

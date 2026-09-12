@@ -38,7 +38,6 @@ export default function NativeGame({
     element.addEventListener("keyup", key);
     element.addEventListener("blur", clear);
     window.addEventListener("blur", clear);
-    bridge.setGameActive(true);
     element.focus();
     return () => {
       bridge.setGameActive(false);
@@ -69,6 +68,12 @@ export default function NativeGame({
     }
     async function start() {
       try {
+        setError("");
+        setHasFrame(false);
+        setStatus("Closing the previous match…");
+        await desktop()!.beginGame(session);
+        if (closed) return;
+        desktop()!.setGameActive(true);
         const launch = plan(settings, fighter, roster);
         for (const c of launch.costumes) {
           if (closed) return;
@@ -87,21 +92,26 @@ export default function NativeGame({
         }
         if (closed) return;
         setStatus("Starting Melee…");
-        await request("/api/native/launch", { ...launch, session });
+        let launching = true;
         const poll = async () => {
           try {
             const response = await fetch("/api/native/status", { signal: controller.signal });
             const s = await response.json();
-            if (closed) return;
+            if (closed || s.session !== session) return;
             setStatus(s.message);
             if (s.exitCode && s.exitCode !== 0)
               setError("Melee stopped unexpectedly. The local native-session.log has details.");
-            if (s.running) timer = setTimeout(poll, 500);
+            if (launching || s.running) timer = setTimeout(poll, 500);
           } catch (e) {
             if (!closed) setError((e as Error).message);
           }
         };
         void poll();
+        try {
+          await request("/api/native/launch", { ...launch, session });
+        } finally {
+          launching = false;
+        }
       } catch (e) {
         if (!closed) setError((e as Error).message);
       }
@@ -115,7 +125,8 @@ export default function NativeGame({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session }),
-      });
+        keepalive: true,
+      }).catch(() => {});
     };
   }, [fighter, settings, roster]);
   return (

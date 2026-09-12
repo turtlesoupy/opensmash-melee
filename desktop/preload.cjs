@@ -60,6 +60,7 @@ contextBridge.exposeInMainWorld(
     },
     protocol: 1,
     embedded: true,
+    beginGame: (session) => ipcRenderer.invoke("melee:begin-game", session),
     setGameActive: (active) => {
       surfaceActive = active === true;
       ipcRenderer.send("melee:surface-ready", surfaceActive);

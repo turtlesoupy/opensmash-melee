@@ -106,6 +106,26 @@ else
         },
       });
       surface?.attach(window);
+      const lifecycle = require("./game-lifecycle.cjs")(async (route, body) => {
+        const response = await fetch(origin + route, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-OpenSmash-Token": token },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(20000),
+        });
+        const result = await response.json();
+        if (!response.ok) throw Error(result.error || "Could not change the game session.");
+        return result;
+      }, surface);
+      const resetGame = () => {
+        void lifecycle.reset().catch((error) => {
+          if (!quitting) dialog.showErrorBox("Could not close the game", error.message);
+        });
+      };
+      window.webContents.on("did-start-navigation", (_event, _url, inPlace, mainFrame) => {
+        if (mainFrame && !inPlace) resetGame();
+      });
+      window.webContents.on("render-process-gone", resetGame);
       for (const event of ["enter-full-screen", "leave-full-screen"]) {
         window.on(event, () =>
           window.webContents.send("melee:fullscreen-state", window.isFullScreen()),
@@ -131,6 +151,10 @@ else
           throw Error("Invalid desktop caller.");
       }
       const preferencesPath = path.join(app.getPath("userData"), "launcher-preferences.json");
+      ipcMain.handle("melee:begin-game", (event, session) => {
+        validateCaller(event);
+        return lifecycle.begin(session);
+      });
       ipcMain.on("melee:surface-ready", (event, ready) => {
         validateCaller(event);
         surface?.ready(ready === true);

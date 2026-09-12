@@ -32,6 +32,7 @@
       "package.json",
       "surface.cjs",
       "frame.cjs",
+      "game-lifecycle.cjs",
       "native/build/Release/surface.node"
     ],
     "extraResources": [

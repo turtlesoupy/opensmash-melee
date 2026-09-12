@@ -171,3 +171,51 @@ tests cover that case and the backend/profiling-target selection rules. Use
 `--single-core` for a comparison; the default uses bounded dual-core execution,
 as the launcher does. The benchmark is a native embedded-surface test and does
 not measure the Electron renderer itself.
+
+## Match replacement, reload cleanup, and early gameplay
+
+The desktop main process serializes session reservation and renderer cleanup.
+Selecting a character reserves its session before preparation and closes the
+previous game. A stale request or component cleanup cannot launch or stop a
+newer session. Reloading or losing the renderer clears input and stops the
+native process even when React cleanup never runs.
+
+Windows x64 offline JIT matches now use Dolphin's fast memory arena. Memory
+fault handling and memory-base selection are routed to the child JIT that owns
+the generated code. Block linking remains disabled so the dispatcher still
+visits custom-character hooks. Static execution, netplay, lockstep validation,
+and other platforms retain the previous memory policy. Set
+`OPENSMASH_DISABLE_JIT_FASTMEM=1` to reproduce the slower memory path.
+
+Startup still hashes every game file. Windows hashes independent files on four
+workers, and ordinary asset paths avoid redundant filesystem canonicalization.
+Keyboard-only launches skip gamepad enumeration. Character artwork migration
+checks the selected library entry first, verifies its hash, and falls back to
+library discovery if that entry does not match. The launcher reports separate
+file-checking, graphics initialization, boot, and fighter-loading stages.
+
+The benchmark now defaults to zero warmup and reports every one-second frame
+count, so early slowdown cannot be hidden by a steady-state measurement.
+An initial 60-second test averaged 59.62 FPS; its first 14 one-second windows
+all contained 60 frames, versus 34–45 FPS at the beginning of the earlier run.
+Some later frame dips remain. A desktop integration test selected Obama,
+replaced him with Trump, and reloaded during gameplay; reload exited the engine
+with code 0. The replacement took about six seconds, including shutdown.
+
+The performance build measured **59.94 FPS over 180 seconds with no warmup**.
+Every one-second window contained at least 59 frames, including the beginning
+of combat; the engine exited cleanly. Native combat began 5.05 seconds after
+process launch. Runner SHA-256:
+`6e7c1c54915e134f3393de289e18fee3d5ec4ac288b796acabccdc99afb9f114`.
+This measures native frame presentation; Electron replacement/reload behavior
+was exercised separately in the actual desktop UI.
+
+The subsequent startup-cancellation fix checks the stop marker before entering
+Run and retains shutdown requests until Run exits. The final desktop test
+loaded Obama in 5.54 seconds, switched to Trump in 5.95 seconds, and verified
+clean shutdown both on refresh during combat and refresh during preparation.
+
+The final shipping binary (including early cancellation) was checked again for
+60 seconds with zero warmup: 59.95 FPS, minimum 59 frames in any one-second
+window, combat at 5.15 seconds, clean exit. Runner SHA-256:
+`d37abe2ac94b781708a846ec0e87455a2eb49c84a7aa81c670423e6f9daecf28`.
