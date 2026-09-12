@@ -113,7 +113,7 @@ class NativeService:
             self.stop()
             self.session = session
             self.process = None
-            self.status_message = "Preparing your characterâ€¦"
+            self.status_message = "Preparing your character…"
             return self.status()
 
     def validate(self, plan):
@@ -354,9 +354,9 @@ class NativeService:
             self.session = session
             self.process = None
             self.startup_phase = 0
-            self.status_message = "Connecting your controllersâ€¦"
+            self.status_message = "Connecting your controllers…"
             self.controllers(plan["ports"])
-            self.status_message = "Preparing your game filesâ€¦"
+            self.status_message = "Preparing your game files…"
             game = self.root / "build/native-lineup"
             stage = game.with_name("native-lineup-" + uuid.uuid4().hex)
 

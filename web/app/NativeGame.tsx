@@ -13,7 +13,7 @@ export default function NativeGame({
   roster: Fighter[];
   onClose: () => void;
 }) {
-  const [status, setStatus] = useState("Preparing your characterâ€¦"),
+  const [status, setStatus] = useState("Preparing your character…"),
     [error, setError] = useState("");
   const embedded = desktop()?.embedded;
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -88,7 +88,7 @@ export default function NativeGame({
         setError("");
         setHasFrame(false);
         setGameReady(false);
-        setStatus("Closing the previous matchâ€¦");
+        setStatus("Closing the previous match…");
         await desktop()!.beginGame(session);
         if (closed) return;
         desktop()!.setGameActive(true);
@@ -96,7 +96,7 @@ export default function NativeGame({
         for (const [index, c] of launch.costumes.entries()) {
           if (closed) return;
           setStatus(
-            "Preparing " + (roster.find((f) => f.slug === c.character)?.name || c.character) + `â€¦ (${index + 1}/${launch.costumes.length})`,
+            "Preparing " + (roster.find((f) => f.slug === c.character)?.name || c.character) + `… (${index + 1}/${launch.costumes.length})`,
           );
           await request(
             "/api/prepare/" +
@@ -109,7 +109,7 @@ export default function NativeGame({
           );
         }
         if (closed) return;
-        setStatus("Starting Meleeâ€¦");
+        setStatus("Starting Melee…");
         let launching = true;
         const poll = async () => {
           try {
@@ -161,7 +161,7 @@ export default function NativeGame({
                 canvas.current?.focus();
               }}
             >
-              Fullscreen Â· F11
+              Fullscreen · F11
             </button>
           )}
           <button onClick={onClose}>Return to roster</button>
@@ -182,7 +182,7 @@ export default function NativeGame({
             <div className="native-game-message native-loading" role="status">
               <progress aria-label="Loading game" />
               <p>{status}</p>
-              <small>{elapsed}s elapsed{elapsed >= 15 ? " Â· The first load can take a little longer." : ""}</small>
+              <small>{elapsed}s elapsed{elapsed >= 15 ? " · The first load can take a little longer." : ""}</small>
             </div>
           )}
         </div>
