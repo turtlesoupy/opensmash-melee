@@ -1,5 +1,5 @@
 """Bounded source-link import for the local Melee web launcher."""
-import hashlib,json,re,shutil,subprocess,sys,tempfile,threading,uuid
+import hashlib,json,os,re,shutil,stat,subprocess,sys,tempfile,threading,uuid
 from pathlib import Path
 from urllib.parse import urlsplit,urljoin
 from urllib.request import Request,build_opener,HTTPRedirectHandler,ProxyHandler
@@ -60,9 +60,9 @@ def import_source(link,destination,origins,fetch=download):
     return {'name':name,'short':short,'signature':hashlib.sha256(signature.encode()).hexdigest()}
 
 class ImportManager:
-    def __init__(self,catalog,lock,origins=None):
+    def __init__(self,catalog,lock,origins=None,workspace=ROOT):
         self.catalog=catalog;self.lock=lock;self.origins=set(origins or ['https://smash.fun','https://www.smash.fun'])
-        self.root=ROOT/'build/character-imports';self.root.mkdir(parents=True,exist_ok=True)
+        self.workspace=Path(workspace);self.root=self.workspace/'build/character-imports';self.root.mkdir(parents=True,exist_ok=True)
         self.index=self.root/'roster.json';self.jobs={};self.pool=ThreadPoolExecutor(max_workers=1);self.state_lock=threading.Lock()
         self.rows=json.loads(self.index.read_text()) if self.index.exists() else []
         self.catalog.update({r['slug']:r for r in self.rows})
@@ -73,6 +73,25 @@ class ImportManager:
             if any(j['state'] in ['queued','working'] for j in self.jobs.values()):raise ValueError('A character import is already in progress. Wait for it to finish.')
             token=uuid.uuid4().hex;job={'id':token,'state':'queued','message':'Waiting to import…'};self.jobs[token]=job
         self.pool.submit(self.work,job,url,target);return dict(job)
+    def remove(self,slug):
+        """Forget an imported fighter and delete its converted costume, retained source and portrait."""
+        with self.state_lock:
+            if any(j['state'] in ['queued','working'] for j in self.jobs.values()):raise ValueError('Wait for the current character import to finish first.')
+        with self.lock:
+            row=self.catalog.get(slug)
+            if not isinstance(slug,str) or not row or not row.get('imported'):raise ValueError('Only characters you imported can be removed.')
+            self.rows=[r for r in self.rows if r['slug']!=slug]
+            atomic_write(self.index,(json.dumps(self.rows,indent=2)+'\n').encode());del self.catalog[slug]
+            ident='web-v1-'+hashlib.sha256(slug.encode()).hexdigest()[:16]
+            for folder in [self.workspace/'build/characters'/ident,self.workspace/'assets/characters'/ident]:
+                # Windows refuses to delete files with open handles or the read-only bit; clear the bit, then park anything left over.
+                def retry(fn,path,exc):
+                    try:os.chmod(path,stat.S_IWRITE);fn(path)
+                    except OSError:pass
+                shutil.rmtree(folder,onexc=retry)
+                if folder.exists():folder.rename(self.root/(folder.parent.name+'-'+ident+'-removed-'+uuid.uuid4().hex))
+            (self.root/(slug+'.webp')).unlink(missing_ok=True)
+        return row
     def work(self,job,url,target):
         def progress(message):job.update(state='working',message=message)
         try:
@@ -84,7 +103,7 @@ class ImportManager:
                     existing=self.catalog.get(slug)
                     if existing:job.update(state='complete',message='Character is ready.',fighter=existing);return
                     ident='web-v1-'+hashlib.sha256(slug.encode()).hexdigest()[:16]
-                    output=ROOT/'build/characters'/ident;imported=ROOT/'assets/characters'/ident
+                    output=self.workspace/'build/characters'/ident;imported=self.workspace/'assets/characters'/ident
                     # Keep failed-attempt diagnostics instead of deleting source files.
                     for folder in [output,imported]:
                         if folder.exists():folder.rename(self.root/(folder.parent.name+'-'+ident+'-'+uuid.uuid4().hex))

@@ -10,6 +10,7 @@ import SettingsMenu from "./SettingsMenu";
 import RosterGrid, { FrameRule } from "./RosterGrid";
 import SiteDialog from "./SiteDialog";
 import ImportCharacter from "./ImportCharacter";
+import ManageCharacter from "./ManageCharacter";
 import { loadSettings, type Settings } from "@/lib/launch";
 import { unlockAudio } from "@/lib/audio";
 import { warmMelee } from "@/lib/melee-session";
@@ -53,6 +54,7 @@ export default function Home() {
     ),
     [error, setError] = useState("");
   const [dialog, setDialog] = useState<"Settings" | "Controls" | "About" | "Create" | null>(null);
+  const [manage, setManage] = useState<Fighter | null>(null);
   useEffect(() => desktop()?.onOpenSettings(() => setDialog("Settings")), []);
   const frame = useRef<HTMLDivElement>(null),
     launchId = useRef(0);
@@ -210,6 +212,7 @@ export default function Home() {
           onQuery={setQuery}
           onChoose={choose}
           onCreate={() => setDialog("Create")}
+          onManage={setManage}
           paused={!!selected}
         />
         <div className="roster-status" role="status">
@@ -230,6 +233,22 @@ export default function Home() {
           )}
         </div>
       </main>
+      {manage && (
+        <SiteDialog title={manage.name} onClose={() => setManage(null)}>
+          <ManageCharacter
+            fighter={manage}
+            onPlay={(fighter) => {
+              setManage(null);
+              choose(fighter);
+            }}
+            onRemoved={(fighter) => {
+              setManage(null);
+              if (selected?.fighter.slug === fighter.slug) setSelected(null);
+              setRoster((previous) => previous.filter((f) => f.slug !== fighter.slug));
+            }}
+          />
+        </SiteDialog>
+      )}
       {dialog && (
         <SiteDialog title={dialog} onClose={() => setDialog(null)}>
           {dialog === "Create" && <ImportCharacter onImported={fighter=>setRoster(previous=>[fighter,...previous.filter(f=>f.slug!==fighter.slug)])} onPlay={fighter=>{setDialog(null);choose(fighter);}}/>}

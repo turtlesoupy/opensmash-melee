@@ -9,6 +9,13 @@ original OpenSmash character creator. Account linking is not required.
    choose Mario, Luigi, Captain Falcon, Fox, Marth, or Link's moveset.
 3. Wait for download, integrity validation, and retargeting; then choose **Play as**.
 
+Imported fighters show a small gear on their roster tile. It opens a manage
+panel with **Play as** and **Remove from roster**; removal asks for a second tap,
+then deletes the converted costume, retained source and portrait from this
+computer through `DELETE /api/imports/<slug>`. The smash.fun creation is not
+affected and can be imported again. Removal is refused while another import is
+running, and bundled roster characters cannot be removed.
+
 Imports persist in the local roster across server restarts. Reimporting identical
 assets with the same name and target reuses the completed conversion. A different
 target creates a separate roster entry. Closing the dialog does not cancel an

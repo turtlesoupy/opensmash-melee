@@ -177,12 +177,26 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass
 
-    def do_POST(self):
+    def local_ui_request(self):
+        # Only same-origin local UI calls may start a converter process or change the roster.
         if TOKEN and self.headers.get('X-OpenSmash-Token') != TOKEN:
-            return self.send_error(403)
-        # Only same-origin local UI calls may start a converter process.
+            return False
         origin = self.headers.get('Origin', '')
-        if not TOKEN and origin and origin not in ('http://127.0.0.1:5174', 'http://localhost:5174'):
+        return TOKEN or not origin or origin in ('http://127.0.0.1:5174', 'http://localhost:5174')
+
+    def do_DELETE(self):
+        if not self.local_ui_request():
+            return self.send_error(403)
+        slug = unquote(urlsplit(self.path).path).removeprefix('/api/imports/')
+        if not self.path.startswith('/api/imports/') or not re.fullmatch(r'import-[a-f0-9]{24}', slug):
+            return self.send_error(404)
+        try:
+            return self.json({'removed': IMPORTS.remove(slug)})
+        except ValueError as error:
+            return self.json({'error': str(error)}, 409)
+
+    def do_POST(self):
+        if not self.local_ui_request():
             return self.send_error(403)
         if self.path.startswith('/api/native/') and NATIVE:
             try:

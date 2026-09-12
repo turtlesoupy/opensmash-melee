@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { fitCaption, expandShortLabel } from "../vendor/opensmash/roster-caption.js";
 import { rosterGridDimensions } from "../vendor/opensmash/roster-layout.js";
 import { renderRules, renderOuterRules } from "../vendor/opensmash/roster-rules.js";
@@ -58,6 +58,7 @@ export default function RosterGrid({
   onQuery,
   onChoose,
   onCreate,
+  onManage,
   paused,
 }: {
   fighters: Fighter[];
@@ -65,6 +66,7 @@ export default function RosterGrid({
   onQuery: (s: string) => void;
   onChoose: (f: Fighter) => void;
   onCreate: () => void;
+  onManage: (f: Fighter) => void;
   paused: boolean;
 }) {
   const [columns, setColumns] = useState(() => (innerWidth >= 800 ? 8 : innerWidth >= 640 ? 6 : 4));
@@ -156,25 +158,41 @@ export default function RosterGrid({
           <Caption text="CREATE" />
         </button>
         {fighters.map((f, i) => (
-          <button
-            key={f.slug}
-            className="replica-cell"
-            data-kind="fighter"
-            style={cell(i + 2)}
-            onClick={() => onChoose(f)}
-            aria-label={`Play as ${f.name}, ${names[f.target]} moveset`}
-            title={`${f.name} · ${names[f.target]}`}
-          >
-            <img
-              className="replica-portrait-layer"
-              src={f.portrait || `/portraits/${f.slug}.webp`}
-              alt=""
-              loading="lazy"
-              width="90"
-              height="86"
-            />
-            <Caption text={expandShortLabel(f.short, f.name)} />
-          </button>
+          <Fragment key={f.slug}>
+            <button
+              className="replica-cell"
+              data-kind="fighter"
+              style={cell(i + 2)}
+              onClick={() => onChoose(f)}
+              aria-label={`Play as ${f.name}, ${names[f.target]} moveset`}
+              title={`${f.name} · ${names[f.target]}`}
+            >
+              <img
+                className="replica-portrait-layer"
+                src={f.portrait || `/portraits/${f.slug}.webp`}
+                alt=""
+                loading="lazy"
+                width="90"
+                height="86"
+              />
+              <Caption text={expandShortLabel(f.short, f.name)} />
+            </button>
+            {f.imported && (
+              <span className="replica-cell-tools" style={cell(i + 2)}>
+                <button
+                  className="replica-cell-gear"
+                  type="button"
+                  onClick={() => onManage(f)}
+                  aria-label={`Manage ${f.name}`}
+                  title={`Manage ${f.name}`}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8.6 5.2.1-1.7-.1-1.7-2.2-.6a6.9 6.9 0 0 0-.7-1.7l1.1-2-2.4-2.4-2 1.1a6.9 6.9 0 0 0-1.7-.7L12.1 2h-3.4l-.6 2.2a6.9 6.9 0 0 0-1.7.7l-2-1.1L2 6.2l1.1 2a6.9 6.9 0 0 0-.7 1.7l-2.2.6-.1 1.5.1 1.9 2.2.6c.2.6.4 1.2.7 1.7l-1.1 2 2.4 2.4 2-1.1c.5.3 1.1.5 1.7.7l.6 2.2h3.4l.6-2.2c.6-.2 1.2-.4 1.7-.7l2 1.1 2.4-2.4-1.1-2c.3-.5.5-1.1.7-1.7l2.2-.6Z" />
+                  </svg>
+                </button>
+              </span>
+            )}
+          </Fragment>
         ))}
       </div>
     </div>
