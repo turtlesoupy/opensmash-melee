@@ -94,11 +94,16 @@ export default function NativeGame({
         if (closed) return;
         desktop()!.setGameActive(true);
         const launch = plan(settings, fighter, roster);
-        for (const [index, c] of launch.costumes.entries()) {
+        let prepared = 0;
+        const preparationStatus = () => {
+          const name = launch.costumes.length === 1
+            ? roster.find((f) => f.slug === launch.costumes[0].character)?.name || launch.costumes[0].character
+            : "characters";
+          setStatus(`Preparing ${name}… (${prepared}/${launch.costumes.length})`);
+        };
+        preparationStatus();
+        await Promise.all(launch.costumes.map(async (c: { character: string; target: string; color: number }) => {
           if (closed) return;
-          setStatus(
-            "Preparing " + (roster.find((f) => f.slug === c.character)?.name || c.character) + `… (${index + 1}/${launch.costumes.length})`,
-          );
           await request(
             "/api/prepare/" +
               encodeURIComponent(c.character) +
@@ -108,7 +113,11 @@ export default function NativeGame({
               (launch.costumes.length >= 3 ? "&compact=1" : ""),
             {},
           );
-        }
+          if (!closed) {
+            prepared += 1;
+            preparationStatus();
+          }
+        }));
         if (closed) return;
         setStatus("Starting Melee…");
         let launching = true;
@@ -133,6 +142,7 @@ export default function NativeGame({
           launching = false;
         }
       } catch (e) {
+        controller.abort();
         clearTimeout(timer);
         if (!closed) setError((e as Error).message);
       }

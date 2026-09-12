@@ -27,6 +27,16 @@ CATALOG = {r['slug']: r for r in json.loads((ROOT / 'web/public/catalog.json').r
 from opensmash_melee.targets import PLAYABLE, BY_SLUG, cache_id
 KINDS = {slug:(row['fighter'],row['code']) for slug,row in BY_SLUG.items()}
 LOCK = threading.Lock()
+# Serialize writes to one character/moveset cache, while allowing independent
+# characters to prepare together. Duplicate requests must not consume slots.
+PREPARATION_SLOTS = threading.BoundedSemaphore(4)
+PREPARATION_LOCKS = {}
+
+
+def preparation_lock(ident):
+    with LOCK:
+        return PREPARATION_LOCKS.setdefault(ident, threading.Lock())
+
 TRACE_IO = False
 IMPORTS = None
 SETUP = None
@@ -316,7 +326,7 @@ class Handler(BaseHTTPRequestHandler):
         if not 0 <= color < len(slots): return self.send_error(400)
         ident = cache_id(slug,target,row['target'])
         output = ROOT / 'build/characters' / ident
-        with LOCK:
+        with preparation_lock(ident), PREPARATION_SLOTS:
             if not (output / f'Pl{code}Nr.dat').is_file():
                 source = CHARACTERS / slug
                 if row.get('imported'): source = ROOT/'assets/characters'/cache_id(slug,row['target'],row['target'])
@@ -331,11 +341,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self.json({'error': 'This character needs a retarget correction before it can enter combat.'}, 422)
             from tools.upgrade_character_surfaces import upgrade
             upgrade(ident, CHARACTERS / slug)
-        host_skin = parse_qs(urlsplit(self.path).query).get('skin') == ['host']
-        compact = host_skin and query.get('compact') == ['1']
-        skin_folder = 'browser-compact' if compact else 'browser'
-        if host_skin:
-            with LOCK:
+            host_skin = parse_qs(urlsplit(self.path).query).get('skin') == ['host']
+            compact = host_skin and query.get('compact') == ['1']
+            skin_folder = 'browser-compact' if compact else 'browser'
+            if host_skin:
                 stats_path = output / skin_folder / 'stats.json'
                 stats = json.loads(stats_path.read_text()) if stats_path.is_file() else {}
                 if not (output / skin_folder / f'Pl{code}Nr.dat').is_file() or stats.get('texture_slot_version') != 1:
@@ -343,10 +352,9 @@ class Handler(BaseHTTPRequestHandler):
                     if result.returncode:
                         (output / 'browser-error.log').write_text(result.stdout + result.stderr)
                         return self.json({'error': 'The browser skinning build failed.'}, 422)
-        filename = slots[color]['filename']
-        # Refresh existing caches too; a material fix must reach previously
-        # selected fighters without forcing another mesh conversion.
-        with LOCK:
+            filename = slots[color]['filename']
+            # Refresh existing caches too; a material fix must reach previously
+            # selected fighters without forcing another mesh conversion.
             folder = output / skin_folder if host_skin else output
             base = folder / slots[0]['filename']
             old = base.read_bytes()
@@ -359,8 +367,7 @@ class Handler(BaseHTTPRequestHandler):
                     info.update(output_sha256=hashlib.sha256(lit).hexdigest(),
                                 output_bytes=len(lit), lighting='melee-diffuse-replace-v2')
                     atomic_write(metadata, (json.dumps(info, indent=2) + '\n').encode())
-        if color:
-            with LOCK:
+            if color:
                 folder = output / skin_folder if host_skin else output
                 raw = costume_variant((folder / slots[0]['filename']).read_bytes(), fighter, color, target)
                 (folder / filename).write_bytes(raw)
