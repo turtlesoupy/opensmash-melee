@@ -30,7 +30,7 @@ def build(inputs, out):
     apply_native_patches(runtime, [ROOT / "runtime/patches/native" / name for name in [
         "keyboard-no-beep.patch", "zz-electron-embedded.patch", "windows-sdk-compat.patch",
         "zz-graceful-stop.patch",
-        "zz-performance.patch"
+        "zz-performance.patch", "zz-windows-jit.patch"
     ]])
     host = ROOT / "build/desktop-runtime-host"
     module = ROOT / "build/desktop-runtime-module"
@@ -174,9 +174,11 @@ def build(inputs, out):
         "opensmash-embedded-test",
         "opensmash-mod-dispatch-test",
         "opensmash-hash-test",
+        "opensmash-backend-test",
         "-j",
         jobs,
     )
+    run(host / ("opensmash-backend-test.exe" if os.name == "nt" else "opensmash-backend-test"))
     input_test = host / ("opensmash-embedded-test.exe" if os.name == "nt" else "opensmash-embedded-test")
     run(input_test, host / "embedded-input-test.bin")
     run(host / ("opensmash-mod-dispatch-test.exe" if os.name == "nt" else "opensmash-mod-dispatch-test"))

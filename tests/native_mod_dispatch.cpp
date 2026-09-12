@@ -31,7 +31,10 @@ int main() {
   CPUState state{};
   state.lr = 0x80004000u; state.gpr[1] = 0x81000000u; state.gpr[3] = 5;
   // An ordinary call must still trigger runtime_start exactly once.
+  assert(manager.HandlesAddress(0x80008000u));
+  assert(!manager.HandlesRange(0x80008000u, 0x80008004u));
   assert(!manager.Dispatch(&state, 0x80008000u));
+  assert(!manager.HandlesAddress(0x80008000u));
   assert(starts == 1);
   assert(manager.HandlesAddress(0x80002000u));
   assert(manager.Dispatch(&state, 0x80002000u));

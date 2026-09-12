@@ -42,10 +42,12 @@ $env:CC = 'clang-cl'
 $env:CXX = 'clang-cl'
 $env:PYTHONUTF8 = '1'
 if ($EngineOnly) {
-    cmake --build build/desktop-runtime-host --target moderngekko-run opensmash-launch opensmash-controllers opensmash-embedded-test opensmash-mod-dispatch-test opensmash-hash-test -j 16
+    cmake --build build/desktop-runtime-host --target moderngekko-run opensmash-launch opensmash-controllers opensmash-embedded-test opensmash-mod-dispatch-test opensmash-hash-test opensmash-backend-test -j 16
     if ($LASTEXITCODE) { throw 'Native compilation failed.' }
     & build/desktop-runtime-host/opensmash-embedded-test.exe build/desktop-runtime-host/embedded-input-test.bin
     if ($LASTEXITCODE) { throw 'Embedded input test failed.' }
+    & build/desktop-runtime-host/opensmash-backend-test.exe
+    if ($LASTEXITCODE) { throw 'CPU backend selection test failed.' }
     & build/desktop-runtime-host/opensmash-mod-dispatch-test.exe
     if ($LASTEXITCODE) { throw 'Mod dispatch test failed.' }
     & build/desktop-runtime-host/opensmash-hash-test.exe build/desktop-runtime-host/hash-test-data.bin

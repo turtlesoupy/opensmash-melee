@@ -116,10 +116,58 @@ resolves each relative path once instead of during every sort comparison.
 Every asset is still hashed. Native tests check known file/directory digests,
 hook collisions, return hooks, and mod reload behavior.
 
-CPU phase profiling still shows simulation as the limiting factor (roughly
+Before the JIT change below, CPU phase profiling showed simulation as the limiting factor (roughly
 18 ms per frame). Lower rendering resolution and experimental AVX2 / inline
 FP changes did not establish an improvement; those experiments are excluded.
 The tested local package retains the original portable game module and uses
 the rebuilt engine, controllers, and launch mod. Graceful exit was verified
 with exit code zero and saved shader caches. Cold shader compilation, every
-character/mode, and sustained 60 FPS are not certified by these measurements.
+character/mode are not certified by those initial measurements.
+
+
+## Windows JIT execution and freeze regression
+
+Windows offline matches now use the runtime's existing JIT engine while keeping
+native mod hooks and the portable module used by custom skinning. Other platforms
+keep their previous default. Netplay, lockstep validation, and runtimes without a
+JIT retain static execution. Set `OPENSMASH_CPU_BACKEND=static` to compare the old
+execution path; the override does not change the netplay/lockstep guards.
+
+The initial JIT experiment exposed an optimizer bailout bug. Failed constant
+assumptions were recorded on the outer static core, while its child JIT compiled
+the blocks. The child could keep executing the same failing guard without
+charging cycles (observed at guest PC `0x802fbd14`), freezing presentation and
+preventing shutdown. Exception profiling and invalidation now target the actual
+compiling engine. Startup mod callbacks also run before the first guest
+instruction when execution enters through the JIT's address probe.
+
+After that correction, the custom Obama versus CPU Peach test completed a full
+180-second measurement at 59.8 FPS, with no frozen seconds and a clean exit.
+Seven one-second windows were below 58 frames; the slowest contained 54 frames.
+A second, warmed-cache 120-second run measured 59.93 FPS, also with a clean exit;
+four one-second windows had 57 frames. This preserves the existing rendering
+settings. Whole-module optimization was
+also tested (56.1 FPS on the static path) and is not included in the package.
+
+Reproduce a measurement using a prepared lineup and initialized memory card:
+
+```powershell
+$gameWorkspace = Join-Path $env:APPDATA 'OpenSmash Melee/workspace'
+.\.venv\Scripts\python.exe tools/benchmark_native_windows.py `
+  --runtime build/desktop-runtime `
+  --game "$gameWorkspace/build/native-lineup" `
+  --user-template "$gameWorkspace/build/native-user" `
+  --output build/benchmarks/windows-current `
+  --measure 180 --timeout 240
+```
+
+The default match is CPU Link versus CPU Peach on Battlefield; the measured
+lineup supplies the custom Obama costume for Link. The output directory must be
+new. The harness copies the profile, records binary
+hashes, allows 15 seconds of warmup, and reports FPS over the **entire** requested
+window. A frozen tail must count as missing frames; dividing only by the time
+between the first and last delivered frames previously hid a stall. Regression
+tests cover that case and the backend/profiling-target selection rules. Use
+`--single-core` for a comparison; the default uses bounded dual-core execution,
+as the launcher does. The benchmark is a native embedded-surface test and does
+not measure the Electron renderer itself.
