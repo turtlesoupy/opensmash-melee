@@ -7,18 +7,20 @@ const fs=require('node:fs'),path=require('node:path');
  const iso=path.resolve(process.argv[2]),output=path.resolve(process.argv[3]||'build/local-disc-validation');
  const passes=w=>w.fps>=58.5&&w.p95<=20&&w.p99<=33.34&&w.audioUnderrunSamples===0&&w.audioRenderedSamples>=w.durationMs*48*.95;
  const players=Number(process.argv[4]||2),events=[],requests=[],errors=[],samples=[];
+ const measuredWindows=Number(process.env.MELEE_WINDOWS||0);
+ if(!Number.isInteger(measuredWindows)||measuredWindows<0||(measuredWindows>0&&measuredWindows<3))throw Error('MELEE_WINDOWS must be 0 or at least 3');
  fs.mkdirSync(output,{recursive:true});
  const context=await chromium.launchPersistentContext(fs.mkdtempSync(path.join(output,'profile-')),{channel:'chrome',headless:false,viewport:{width:1200,height:900},ignoreDefaultArgs:['--mute-audio']});
  const page=context.pages()[0],cdp=process.env.MELEE_TRACE?await context.newCDPSession(context.pages()[0]):null;
  let tracing=false;
- await page.exposeFunction('recordMeleeEvent',data=>events.push({...data,receivedAt:Date.now()}));
+ await page.exposeFunction('recordMeleeEvent',data=>{events.push({...data,receivedAt:Date.now()});if(data.type==='combat-performance')console.log(JSON.stringify(data));});
  await page.addInitScript(({players,lineup})=>{
-  window.testAudioContexts=[];
+  window.testAudioContexts=[];window.testMeleeError='';
   const AudioBase=window.AudioContext;
   window.AudioContext=class extends AudioBase {constructor(...args){super(...args);window.testAudioContexts.push(this);}};
   const WorkerBase=window.Worker;
-  window.Worker=class extends WorkerBase {constructor(...args){super(...args);this.addEventListener('message',({data})=>{if(!['frame','metrics','pad'].includes(data.type))window.recordMeleeEvent(data);});}};
-  localStorage.setItem('melee-launch-v1',JSON.stringify({mode:0,stage:31,level:9,stocks:20,minutes:8,ports:[{device:'keyboard',character:'selected'},{device:'cpu',character:lineup==='custom'?'donaldtrump':'vanilla:2'}, {device:players===4?'cpu':'off',character:lineup!=='stock'?'abrahamlincoln':'vanilla:9'},{device:players===4?'cpu':'off',character:lineup!=='stock'?'barackobama':'vanilla:12'}]}));
+  window.Worker=class extends WorkerBase {constructor(...args){super(...args);this.addEventListener('message',({data})=>{if(data.type==='error')window.testMeleeError=data.message;if(!['frame','metrics','pad'].includes(data.type))window.recordMeleeEvent(data);});}};
+  localStorage.setItem('melee-launch-v1',JSON.stringify({mode:0,stage:31,level:9,stocks:20,minutes:8,ports:[{device:'keyboard',character:lineup==='all-stock'?'vanilla:8':'selected',target:'mario'},{device:'cpu',character:lineup==='custom'?'donaldtrump':'vanilla:2'}, {device:players===4?'cpu':'off',target:!['stock','all-stock'].includes(lineup)?'captain-falcon':'auto',character:lineup==='all-stock'?'vanilla:0':lineup!=='stock'?'abrahamlincoln':'vanilla:9'},{device:players===4?'cpu':'off',target:!['stock','all-stock'].includes(lineup)?'link':'auto',character:lineup==='all-stock'?'vanilla:6':lineup!=='stock'?'barackobama':'vanilla:12'}]}));
  },{players,lineup:process.env.MELEE_LINEUP||'stock'});
  await page.route('**/api/game{,/**}',route=>{errors.push('Forbidden game request: '+route.request().url());return route.abort();});
  await page.route('**/api/setup{,/**}',route=>{errors.push('Forbidden setup request: '+route.request().url());return route.abort();});
@@ -37,7 +39,8 @@ const fs=require('node:fs'),path=require('node:path');
    finally{fs.unlinkSync(invalid);}
   }
   await page.getByLabel('Choose Melee ISO, GCM or ZIP').setInputFiles(iso);
-  await page.waitForFunction(()=>document.querySelector('.boot-disc [role="status"]')?.textContent==='Ready to play.',null,{timeout:120000});
+  await page.waitForFunction(()=>window.testMeleeError||document.querySelector('.boot-disc [role="status"]')?.textContent==='Ready to play.',null,{timeout:120000});
+  const bootError=await page.evaluate(()=>window.testMeleeError);if(bootError)throw Error(bootError);
   if(process.env.MELEE_SETUP_ONLY){if(errors.length)throw Error(errors.join('\n'));console.log(process.env.MELEE_CHECK_INVALID?'Invalid disc rejection and valid local disc recovery passed.':'Local disc setup passed.');return;}
   const runStarted=events.length;
   await page.getByRole('button',{name:'Play as Alan Turing, Mario moveset',exact:true}).click();
@@ -52,7 +55,7 @@ const fs=require('node:fs'),path=require('node:path');
    if(!captured&&await page.locator('.fps').textContent()) {captured=true;await page.getByRole('button',{name:'Enable sound',exact:true}).click();await page.screenshot({path:path.join(output,'first-playable.png')});}
    if(!captured)await page.getByRole('button',{name:'Confirm · A',exact:true}).click();
    if(captured&&cdp&&!tracing){tracing=true;await cdp.send('Tracing.start',{categories:'v8,disabled-by-default-v8.cpu_profiler',transferMode:'ReturnAsStream'});}
-   if(cdp?windows.length>=1:windows.length>=3&&windows.slice(-3).every(passes))break;
+   if(cdp?windows.length>=1:measuredWindows?windows.length>=measuredWindows:windows.length>=3&&windows.slice(-3).every(passes))break;
   }
   await page.screenshot({path:path.join(output,'combat.png')});
   if(cdp&&tracing){
@@ -68,6 +71,7 @@ const fs=require('node:fs'),path=require('node:path');
   if(cdp)return;
   if(windows.length<3)throw Error('Missing three combat windows');
   if(errors.length)throw Error(errors.join('\n'));
+  if(process.env.MELEE_LINEUP==='all-stock'&&requests.some(r=>new URL(r.url).pathname.startsWith('/api/prepare/')||new URL(r.url).pathname==='/api/character-select'))throw Error('All-stock run unexpectedly prepared injected assets');
    if(process.env.MELEE_REPLAY){
    const checked=events.filter(e=>e.type==='status'&&e.message==='Checking your game… 4%').length;
    await page.getByRole('button',{name:'Return to roster',exact:true}).click();
@@ -78,6 +82,7 @@ const fs=require('node:fs'),path=require('node:path');
   }
   if(!windows.slice(-3).every(passes))throw Error('60 FPS gate failed');
  }finally{
+  fs.writeFileSync(path.join(output,'run.json'),JSON.stringify({players,lineup:process.env.MELEE_LINEUP||'stock',measuredWindows},null,2));
   fs.writeFileSync(path.join(output,'events.json'),JSON.stringify(events,null,2));
   fs.writeFileSync(path.join(output,'network.json'),JSON.stringify(requests,null,2));
   fs.writeFileSync(path.join(output,'samples.json'),JSON.stringify(samples,null,2));

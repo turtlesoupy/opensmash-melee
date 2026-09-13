@@ -20,6 +20,7 @@ add_custom_command(OUTPUT "${OPENSMASH_MODULE_TABLES}"
   DEPENDS "${OPENSMASH_RECOMPILED_GAME}/generated.h"
     "${OPENSMASH_RECOMPILED_GAME}/generated_smc.txt" "${OPENSMASH_RECOMPILED_GAME}/main.dol")
 file(GLOB OPENSMASH_CHUNKS CONFIGURE_DEPENDS "${OPENSMASH_RECOMPILED_GAME}/chunks/*.c")
+include("${OPENSMASH_RECOMPILED_GAME}/opensmash_entries.cmake")
 add_library(opensmash-game STATIC
   "${OPENSMASH_DOLPHIN}/module-template/module_export.c"
   "${OPENSMASH_MODULE_TABLES}"
@@ -45,10 +46,19 @@ if(NOT OPENSMASH_HOT_GAME_CHUNKS)
     "${OPENSMASH_RECOMPILED_GAME}/chunks/chunk_3546_text1_80379940.c"
     "${OPENSMASH_RECOMPILED_GAME}/chunks/chunk_3549_text1_8037A540.c")
 endif()
+set(OPENSMASH_HOT_ENTRY_CHUNKS)
+foreach(chunk IN LISTS OPENSMASH_HOT_GAME_CHUNKS)
+  get_filename_component(chunk_name "${chunk}" NAME)
+  set(entry_chunk "${OPENSMASH_RECOMPILED_GAME}/entries/${chunk_name}")
+  if(EXISTS "${entry_chunk}")
+    list(APPEND OPENSMASH_HOT_ENTRY_CHUNKS "${entry_chunk}")
+  endif()
+endforeach()
 set_source_files_properties(
   "${OPENSMASH_DOLPHIN}/GXRuntime/src/core/cpu.c"
   "${OPENSMASH_DOLPHIN}/GXRuntime/src/core/cpu_interpreter_float.c"
   ${OPENSMASH_HOT_GAME_CHUNKS}
+  ${OPENSMASH_HOT_ENTRY_CHUNKS}
   PROPERTIES COMPILE_OPTIONS "-flto")
 # Inline the hot dispatcher and CPU-state/memory helpers across their C++ files.
 set_source_files_properties(

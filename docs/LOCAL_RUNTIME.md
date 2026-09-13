@@ -43,6 +43,8 @@ For ROM-first Apple Silicon app builds, see [NATIVE.md](NATIVE.md).
 
 - Static PPC recompilation, with 256-instruction compilation regions to avoid
   pathological Wasm compiler time on large irreducible control-flow graphs.
+- Hot-region entry specialization and deferred guest-PC stores, with original
+  entry functions retained as correctness-tested fallbacks.
 - WebGL 2 renderer with a separate capability-probe canvas; the real canvas moves
   directly to the CPU/GPU worker. Explicit ImageBitmap presentation lets the game
   retain its synchronous loop without blocking the browser UI.
@@ -60,11 +62,14 @@ For ROM-first Apple Silicon app builds, see [NATIVE.md](NATIVE.md).
 ## Validation status
 
 The browser runs actual Battlefield combat with custom characters, damage,
-stocks, respawns, items and sound. An earlier browser skinning build passed sustained
-combat checks for all six movesets on the local Apple M5. The current launch-mode
-renderer has recorded FPS failures in two- and four-player tests. See [PERFORMANCE.md](PERFORMANCE.md)
-for per-character windows, effect-related dips and exact build identities. This is a two-fighter test, not a
-four-player or mobile performance certificate.
+stocks, respawns, items and sound. The September 12 hot-entry build passed the
+stock two-player and injected four-player 60 FPS/frame-time/audio gates on the
+Apple M5, with replay checked.
+All-stock four-player combat remains below target at roughly 54–56 FPS. See the
+hot-entry measurements below for current build identities and lineup results.
+An earlier skinning build passed all six movesets; [PERFORMANCE.md](PERFORMANCE.md)
+records those historical per-character windows and effect-related dips. Neither
+result certifies every mode, stage, roster combination or mobile device.
 
 Browser keyboard taps and persisted save reuse were verified. The roster launch
 unlocks fighters in the local virtual game so Luigi and Marth are available on a
@@ -138,21 +143,155 @@ fail rather than mixing a new binary with old glue. The September 12 baseline
 Wasm is 118,615,393 bytes uncompressed and 17,963,498 bytes over gzip (17.1 MiB).
 Range reads retain the original uncompressed byte offsets.
 
-Region-size experiments run with `tools/build_recomp_browser.py
---chunk-instructions 1024`. They use separate generated code and build directories,
-leaving the default 256-instruction build intact. Point `MELEE_BROWSER_BUILD` at
-an experimental output directory when launching the local server. This is an
-AOT code-layout experiment; native ARM/x86 JIT machine code cannot be reused by
-the browser runtime. Guest instructions, floating-point behavior, timing checks
-and mod callbacks remain required validation boundaries.
-
 The browser now follows native's compact texture policy when a match contains
 three or more custom costumes. Preparation and download both select
 `browser-compact` assets (256-pixel textures); source mesh geometry and weights
 are retained. This prevents the guest heap allocation failure in the tested
 Turing/Fox/Lincoln/Obama lineup.
 
-`--hot-lto` is another opt-in compiler experiment, publishing to a separate
-`-hot` output folder. Neither expanded LTO nor 1024-instruction regions met the
-four-player frame-rate target in the September 12 tests. The default remains
-256-instruction regions with the existing exact math specializations.
+### Performance measurements
+
+The failed larger-region, expanded-LTO, SIMD128, and manual GPR-cache experiments
+have been removed from the build tools and active candidate outputs. The CPU/GPU threading prototype
+was also removed after its earlier benefit failed to reproduce. The normal
+build retains 256-instruction regions and the proven exact math specializations.
+Historical measurements below record rejected configurations, not available flags.
+
+For a fixed-length comparison, `MELEE_WINDOWS=4` collects four 30-second combat
+windows and still fails if the final three do not meet the existing gate.
+
+
+
+September 12 controlled-lineup measurements on the Apple M5 in headed Chrome:
+
+| Runtime | All-stock fighters | Three injected costumes + Fox |
+| --- | --- | --- |
+| Scalar, single CPU/GPU thread | 37.4–38.8 FPS | 44.2–47.1 FPS |
+| Scalar, bounded CPU/GPU threads | 39.5–43.7 FPS | 47.3–51.3 FPS (two runs) |
+| SIMD128, bounded CPU/GPU threads | 40.9–41.9 FPS | 45.1–47.9 FPS |
+| SIMD128, single CPU/GPU thread | Not measured | 44.0–46.4 FPS |
+
+Each run contains four approximately 30-second combat windows with audio and no
+recorded underruns. All fail the 60 FPS/frame-time gate. CPU-controlled matches
+vary; these results suggest a modest threading benefit, not a deterministic
+speedup certificate. Removing the GPU lead bound gave 48.2–51.4 FPS in the
+injected lineup, without a clear advantage over bounded threading. Threaded
+replay was checked in the injected scalar and SIMD runs. Normal runtime defaults
+remain scalar and single-threaded.
+
+`MELEE_LINEUP=all-stock` selects Mario, Fox, Captain Falcon and Link, matching the
+underlying fighters in `default`; it also rejects injected-asset preparation
+requests. The older `stock` label retains its mixed Turing/stock-opponent test
+and must not be described as all-stock. All-stock screenshots and network records
+confirm original fighters and no costume/character-select asset preparation.
+The slowdown is therefore not confined to injection. The stock CPU trace
+attributed 17.54 of 29.22 sampled seconds to game dispatch (inclusive); profiling
+clock overhead means this trace is attribution evidence, not a frame-rate run.
+Raw windows and build identities: `build/wasm-next/summary.json`; stock profile:
+`build/wasm-next/stock-profile/`. SIMD arithmetic validation passed 12,000 concat,
+12,000 scaled-matrix and 960,000 FMA full-state comparisons. SIMD was rejected and its build option removed.
+
+### Rejected direct LLVM backend screen
+
+A private wasm32 port of the pinned native LLVM backend replaced 24 profiled C
+regions. It passed a 49-field ABI layout check, 13 instruction fixtures and
+16,000 full-state probes covering MEM1/MEM2, MMIO, memory aliases, journaling and
+exact FMA flags. The probe reference uses interpreter helpers for double
+add/subtract because the C generator omits their FPSCR updates.
+
+The resulting four-player windows were 26.97, 32.07, 26.52, 27.87 FPS with stock fighters and 44.42, 44.23, 43.83, 44.84 FPS with injected costumes. Audio stayed active with zero recorded underruns, and no runtime errors were reported. Stock performance regressed substantially; the candidate was rejected and its private source, objects and runtime were removed. Evidence: `build/wasm-codegen/summary.json`.
+
+### Threading recheck
+
+A fresh scalar all-stock run produced 43.45, 45.27 and 45.37 FPS. The earlier
+threaded binary then produced 23.67, 23.13 and 22.20 FPS with a one-million-cycle
+GPU lead, and 23.26, 23.07 and 22.55 FPS with a ten-million-cycle lead. A newly
+linked default-threading candidate also regressed (22.74–31.33 FPS), including
+preconfigured and saved-single-thread settings. Moving configuration timing did
+not explain the regression. Neither threading nor a larger GPU lead was promoted;
+the GPU-worker canvas-transfer prototype and harness overrides were removed.
+The normal browser remains single-threaded. Raw evidence is in
+`build/wasm-thread-default/summary.json`. These current measurements supersede
+the earlier suggestion of a reproducible threading benefit on this machine.
+
+### Rejected size-optimized link
+
+A private `-Os` link reduced the binary from 118,615,393 to 118,478,817 bytes
+(0.12%), with a 17,952,360-byte gzip transfer. Stock combat windows were 38.81, 37.19, 38.63 FPS. No useful frame-rate gain was established, so its runtime was removed and the
+standard `-O3` link restored. Evidence: `build/wasm-size/summary.json`.
+
+These later measurements ran on a shared development Mac. Substantial background
+indexing and Apple compiler-service CPU use was observed; host process snapshots
+accompany the size-link run. The measurements do not establish clean-machine
+maximum performance. No rejected candidate was substituted for the normal runtime. The retained
+hot-entry optimization below was evaluated afterward.
+
+
+### Hot-entry specialization and deferred PC stores
+
+The normal browser build now specializes 126 profiled regions. Their entry
+switches contain 4,624 common addresses instead of 32,256; all other addresses
+fall back to the original generated functions. Reviewed integer instructions
+also defer 22,951 redundant guest-PC stores. RAM accesses use the same endian,
+range and reservation logic; MMIO callbacks materialize the original instruction
+PC first. Exceptions, write journaling and overlapping CPU/RAM storage select
+the original path. Floating-point arithmetic, cycle charges, branch destinations
+and idle/throttle behavior are unchanged.
+
+`tools/browser_entry_points.json` pins the DOL and each source hash. The hints
+select fast paths, not permissible guest control flow. Regenerated source that
+changes those hashes requires renewed validation. The generated copies and
+CMake manifest live under the build directory, keeping the original regions
+available for differential testing:
+
+```sh
+python3 tools/validate_browser_entries.py
+python3 tools/build_recomp_browser.py
+```
+
+The oracle passes 387,072 cases against the actual browser game archive, comparing complete CPU state,
+RAM/EXRAM, and callback state/order with retained originals at every instruction
+entry in the selected regions. Its report includes the archive hash.
+
+Private-candidate measurements on the same Apple M5, three 30-second windows:
+
+| Configuration | All-stock four-player FPS |
+| --- | --- |
+| Repeat original baseline | 46.76, 47.23, 48.10 |
+| Smaller entry switches, 25 regions | 48.90, 48.58, 50.35 |
+| Deferred PC stores, 25 regions | 50.33, 51.61, 51.60 |
+| Deferred PC stores, 126 regions | 54.00, 55.74, 54.74 |
+
+The 25-region candidate passed the full stock two-player frame-time/audio gate
+at 59.81, 59.94 and 59.93 FPS. This is not a measured improvement over a fresh
+two-player baseline. The 126-region injected four-player candidate reached
+59.06, 59.94 and 59.93 FPS with no audio underruns or runtime errors; the first
+window narrowly failed the 20 ms p95 gate at 20.11 ms. Neither four-player result
+certifies sustained 60 FPS for general play. Evidence lives in `build/wasm-entry/`,
+`build/wasm-pc/` and `build/wasm-pc128/`.
+
+Additional rejected screens: `-O3` on 26 hot regions, separate functions for
+895 entry addresses, and separate-storage compiler assumptions showed no
+repeatable gain. A uniform-buffer ring regressed presentation and failed scene
+preparation. A SIMD endian-load microbenchmark was slower than scalar loads.
+Their private implementation and runtime files were removed; summaries/logs
+remain in `build/wasm-o3/`, `build/wasm-clones/`, `build/wasm-pc-alias/`,
+`build/wasm-uniform/` and `build/wasm-endian/`. These are not build options.
+
+The normal build reproduces candidate `ec8ce7069ed4439a` byte-for-byte (Wasm SHA
+`ec8ce7069ed4439a361673aca5a1e361fb46fb4d7527b4be99710532b65bff1c`).
+It is 121,159,860 bytes uncompressed and 18,384,658 bytes over gzip, approximately
+2.1% larger uncompressed than the original baseline. Its fresh stock two-player
+run passed all three windows at 59.74, 59.93 and 59.97 FPS; p95 was 17.82–18.05 ms,
+p99 was 18.08–23.53 ms, audio had zero underruns, and replay reused the verified
+ISO. Evidence: `build/wasm-final/stock-two-player/` and
+`build/wasm-final/correctness.json`.
+
+A fresh normal-build injected four-player repeat passed all four windows at
+59.26, 59.80, 60.07 and 59.97 FPS, including the existing frame-time/audio gate;
+replay also passed. Evidence: `build/wasm-final/injected-four-player/`.
+This supersedes the initial injected run's narrow frame-pacing failure, but does
+not remove the all-stock four-player shortfall. Summary and exact window values:
+`build/wasm-final/summary.json`. Superseded private generated sources and runtimes
+were removed after the normal build reproduced their measured binary; evidence
+and build identities remain.
