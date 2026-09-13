@@ -22,4 +22,31 @@ def source_head_fit(mesh,skeleton,profile):
     p['bone_corrections']['Head']=(np.linalg.inv(target)@affine@mesh['bind'][i]).tolist()
     p['fit_scales']['Head']={'length':float(scale),'width':float(scale)}
     p.update(fit_version=6,head_style='source',head_reference={'source_ground':source_ground,'fitted_body_ground':ground,'source_body_span':float(span)})
+    # The highest point can belong to an ear, tail, or blended neck rather
+    # than the head. Anchor distance alone then misses the authored ratio.
+    # Refine only failing fits, keeping the head uniform and its anchor fixed.
+    core=weights>.99
+    if core.sum()>=4:
+        source_fraction=np.ptp(mesh['positions'][core,1])/np.ptp(mesh['positions'][:,1])
+        fitted_y=conform(mesh,skeleton,p)['positions'][:,1]
+        slope=weights*(mesh['positions'][:,1]-origin[1])
+        def fraction_error(candidate):
+            y=fitted_y+(candidate-scale)*slope
+            return np.ptp(y[core])/np.ptp(y)/source_fraction-1
+        if source_fraction>0 and abs(fraction_error(scale))>.05:
+            low,high=scale*.8,scale*1.25
+            low_error,high_error=fraction_error(low),fraction_error(high)
+            if np.isfinite([low_error,high_error]).all() and low_error*high_error<=0:
+                for _ in range(32):
+                    mid=(low+high)/2
+                    if fraction_error(mid)*low_error>0:
+                        low=mid;low_error=fraction_error(mid)
+                    else:high=mid
+                corrected=(low+high)/2
+                affine[:3,:3]=ORIENTATION*corrected
+                affine[:3,3]=target[:3,3]-affine[:3,:3]@origin
+                p['bone_corrections']['Head']=(np.linalg.inv(target)@affine@mesh['bind'][i]).tolist()
+                p['fit_scales']['Head']={'length':float(corrected),'width':float(corrected)}
+                p['head_reference']['anchor_scale']=float(scale)
+                p['head_reference']['proportion_refinement_version']=1
     return p

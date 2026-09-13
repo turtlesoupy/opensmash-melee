@@ -86,8 +86,20 @@ def shape_metrics(mesh,fitted,profile,skeleton):
     x=src-src.mean(axis=0);y=dst-dst.mean(axis=0);u,_,vt=np.linalg.svd(x.T@y);r=u@vt
     scale=float(np.sum((x@r)*y)/np.sum(x*x));error=np.linalg.norm(y-scale*x@r,axis=1)
     affine=np.linalg.lstsq(np.c_[src,np.ones(len(src))],dst,rcond=None)[0][:3];singular=np.linalg.svd(affine,compute_uv=False)
+    # Almost-planar samples amplify tiny contributions from other bones into
+    # a spurious affine stretch. Check the head transform itself in that case;
+    # the similarity residual above still checks the actual blended geometry.
+    source_singular=np.linalg.svd(x,compute_uv=False)
+    anisotropy_method='geometry'
+    if source_singular[-1]<.02*source_singular[0] and not profile.get('ball_fit'):
+        target=np.linalg.inv(skeleton[profile['joint_map']['Head']]['inverse_bind'])
+        correction=np.asarray(profile.get('bone_corrections',{}).get('Head',np.eye(4)))
+        scale=profile.get('bone_scale',1.)
+        transform=target@correction@np.diag([scale,scale,scale,1])@np.linalg.inv(mesh['bind'][i])
+        singular=np.linalg.svd(transform[:3,:3],compute_uv=False)
+        anisotropy_method='head_transform'
     ratio_src=float(np.ptp(src[:,1])/np.ptp(mesh['positions'][:,1]));ratio_dst=float(np.ptp(dst[:,1])/np.ptp(fitted['positions'][:,1]))
-    return dict(core_head_vertices=len(src),head_anisotropy=float(singular.max()/singular.min()),similarity_max_relative_error=float(error.max()/np.ptp(dst,axis=0).max()),source_head_height_fraction=ratio_src,fitted_head_height_fraction=ratio_dst,head_fraction_relative_error=abs(ratio_dst/ratio_src-1),head_size=np.ptp(dst,axis=0).tolist())
+    return dict(core_head_vertices=len(src),head_anisotropy=float(singular.max()/singular.min()),head_anisotropy_method=anisotropy_method,similarity_max_relative_error=float(error.max()/np.ptp(dst,axis=0).max()),source_head_height_fraction=ratio_src,fitted_head_height_fraction=ratio_dst,head_fraction_relative_error=abs(ratio_dst/ratio_src-1),head_size=np.ptp(dst,axis=0).tolist())
 
 
 def main():
