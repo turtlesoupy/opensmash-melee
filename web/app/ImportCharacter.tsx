@@ -41,7 +41,7 @@ export default function ImportCharacter({onImported,onPlay}:{onImported:(f:Fight
    <button className="retro-site-link" type="submit" disabled={busy||!url.trim()}>{busy?'Importing…':'Import character'}</button>
   </form>
   <p>Your character will appear in your roster when it’s ready.</p>
-  {(starting||job)&&<p role="status" aria-live="polite">{starting?'Starting import…':job?.state==='complete'?'Character added to your roster.':job?.state==='failed'?'Import failed.':'Adding your character…'}</p>}
+  {(starting||job)&&<p role="status" aria-live="polite">{starting?'Starting import…':job?.state==='complete'?'Character added to your roster.':job?.state==='failed'?'Import failed.':job?.message||'Adding your character…'}</p>}
   {error&&<p role="alert">{error}</p>}
   {job?.state==='complete'&&job.fighter&&<button className="retro-site-link" onClick={()=>onPlay(job.fighter!)}>Play as {job.fighter.name}</button>}
  </section>;

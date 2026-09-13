@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 from opensmash_melee.costume_variant import costume_variant, SCHEMA
 from opensmash_melee.materials import upgrade_cached_lighting
 from opensmash_melee.__main__ import atomic_write
+from opensmash_melee.character_build import archive_previous_build,run_stage
 GAME = ROOT / 'assets/game'
 CHARACTERS = Path(os.environ.get('OPENSMASH_CHARACTER_ROOT', ROOT.parent / 'opensmash/pipeline/play/ui')).expanduser().resolve()
 SYS = ROOT / 'build/browser-engine/moderngekko-web/vendor/dolphin/Data/Sys'
@@ -340,15 +341,20 @@ class Handler(BaseHTTPRequestHandler):
                 if row.get('imported'): source = ROOT/'assets/characters'/cache_id(slug,row['target'],row['target'])
                 if not (source / 'rigged.glb').is_file():
                     return self.json({'error':'Character source is missing. Reinstall the character library or import the character again.'},422)
-                result = subprocess.run([sys.executable, str(ROOT / 'tools/build_character.py'),
-                                         str(source), '--id', ident, '--target', target],
-                                        cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-                output.mkdir(parents=True, exist_ok=True)
-                (output / 'build.log').write_text(result.stdout)
-                if result.returncode:
-                    return self.json({'error': 'This character needs a retarget correction before it can enter combat.'}, 422)
+                try:
+                    source=archive_previous_build(ROOT,ident,source)
+                    run_stage(['tools/build_character.py',str(source),'--id',ident,'--target',target],
+                              ROOT,ROOT/'build/character-imports'/(ident+'.log'),'Fitting character',target)
+                except (ValueError,OSError) as error:
+                    return self.json({'error':str(error)},422)
             from tools.upgrade_character_surfaces import upgrade
-            upgrade(ident, CHARACTERS / slug)
+            try:
+                upgrade(ident, CHARACTERS / slug)
+            except Exception as error:
+                log=ROOT/'build/character-imports'/(ident+'.log')
+                log.parent.mkdir(parents=True,exist_ok=True)
+                with log.open('a',encoding='utf-8') as stream:stream.write(f'\n[Preparing textures and artwork: {target}]\n{error}\n')
+                return self.json({'error':f'Preparing textures and artwork for {target} failed. Retry; if this repeats, share the diagnostic log: {log}'},422)
             host_skin = parse_qs(urlsplit(self.path).query).get('skin') == ['host']
             compact = host_skin and query.get('compact') == ['1']
             skin_folder = 'browser-compact' if compact else 'browser'
@@ -357,10 +363,11 @@ class Handler(BaseHTTPRequestHandler):
                 stats = json.loads(stats_path.read_text()) if stats_path.is_file() else {}
                 from opensmash_melee.costume_memory import VERSION as MEMORY_VERSION
                 if not (output / skin_folder / f'Pl{code}Nr.dat').is_file() or stats.get('texture_slot_version') != 1 or stats.get('memory_layout_version') != MEMORY_VERSION:
-                    result = subprocess.run([sys.executable, str(ROOT / 'tools/build_browser_skin_costume.py'), ident, *(['--compact'] if compact else [])], cwd=ROOT, capture_output=True, text=True)
-                    if result.returncode:
-                        (output / 'browser-error.log').write_text(result.stdout + result.stderr)
-                        return self.json({'error': 'The browser skinning build failed.'}, 422)
+                    try:
+                        run_stage(['tools/build_browser_skin_costume.py',ident,*(['--compact'] if compact else [])],
+                                  ROOT,ROOT/'build/character-imports'/(ident+'.log'),'Building playable costume',target)
+                    except ValueError as error:
+                        return self.json({'error':str(error)},422)
             filename = slots[color]['filename']
             # Refresh existing caches too; a material fix must reach previously
             # selected fighters without forcing another mesh conversion.

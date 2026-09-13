@@ -45,11 +45,21 @@ class HeadShapeTests(unittest.TestCase):
 
     def test_large_proportion_mismatch_remains_rejected(self):
         mesh,skeleton,profile=fixture()
-        profile['bone_corrections']['Body']=np.diag([4.,4.,4.,1]).tolist()
+        profile['bone_corrections']['Body']=np.diag([5.,5.,5.,1]).tolist()
         result=source_head_fit(mesh,skeleton,profile)
         metrics=shape_metrics(mesh,conform(mesh,skeleton,result),result,skeleton)
         self.assertGreater(metrics['head_fraction_relative_error'],.05)
         self.assertNotIn('proportion_refinement_version',result['head_reference'])
+
+    def test_tall_target_preserves_authored_ratio_without_stretching_head(self):
+        mesh,skeleton,profile=fixture()
+        profile['bone_corrections']['Body']=np.diag([3.,3.,3.,1]).tolist()
+        result=source_head_fit(mesh,skeleton,profile)
+        metrics=shape_metrics(mesh,conform(mesh,skeleton,result),result,skeleton)
+        self.assertLess(metrics['head_fraction_relative_error'],1e-8)
+        self.assertAlmostEqual(result['fit_scales']['Head']['length'],3,places=7)
+        self.assertAlmostEqual(metrics['head_anisotropy'],1)
+        np.testing.assert_array_equal(result['bone_corrections']['Body'],profile['bone_corrections']['Body'])
 
     def test_flat_sample_does_not_amplify_small_blending_error(self):
         mesh,skeleton,profile=fixture(.001)

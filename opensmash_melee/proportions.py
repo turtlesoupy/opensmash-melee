@@ -34,7 +34,10 @@ def source_head_fit(mesh,skeleton,profile):
             y=fitted_y+(candidate-scale)*slope
             return np.ptp(y[core])/np.ptp(y)/source_fraction-1
         if source_fraction>0 and abs(fraction_error(scale))>.05:
-            low,high=scale*.8,scale*1.25
+            # Tall targets and appendages above the head can require more than
+            # a 25% adjustment. Solve for the authored ratio over a bounded
+            # uniform scale range; the final geometry checks still apply.
+            low,high=scale*.5,scale*2
             low_error,high_error=fraction_error(low),fraction_error(high)
             if np.isfinite([low_error,high_error]).all() and low_error*high_error<=0:
                 for _ in range(32):
@@ -48,5 +51,5 @@ def source_head_fit(mesh,skeleton,profile):
                 p['bone_corrections']['Head']=(np.linalg.inv(target)@affine@mesh['bind'][i]).tolist()
                 p['fit_scales']['Head']={'length':float(corrected),'width':float(corrected)}
                 p['head_reference']['anchor_scale']=float(scale)
-                p['head_reference']['proportion_refinement_version']=1
+                p['head_reference']['proportion_refinement_version']=2
     return p

@@ -1,12 +1,14 @@
 """Bounded source-link import for the local Melee web launcher."""
-import hashlib,json,os,re,shutil,stat,subprocess,sys,tempfile,threading,uuid
+import hashlib,json,os,re,shutil,stat,tempfile,threading,uuid
 from pathlib import Path
 from urllib.parse import urlsplit,urljoin
 from urllib.request import Request,build_opener,HTTPRedirectHandler,ProxyHandler
+from urllib.error import HTTPError
 from concurrent.futures import ThreadPoolExecutor
 from PIL import Image
 from .__main__ import atomic_write
 from .glb import GLB
+from .character_build import archive_previous_build,run_stage
 ROOT=Path(__file__).resolve().parents[1]
 FILES={'rigged.glb':64<<20,'portrait_raw.png':16<<20,'stock_raw.png':8<<20,'emblem_raw.png':8<<20,'announcer.wav':16<<20}
 from .targets import PLAYABLE
@@ -31,7 +33,11 @@ def download(url,limit):
             if size and int(size)>limit:raise ValueError('Character asset exceeds the import size limit.')
             raw=response.read(limit+1)
     except ValueError:raise
-    except Exception:raise ValueError('Could not download the character. Copy a fresh Melee import URL and try again.') from None
+    except HTTPError as error:
+        if error.code in (404,410):
+            raise ValueError('This import link is no longer available. Copy a new Melee import URL from smash.fun.') from None
+        raise ValueError(f'Could not download {Path(urlsplit(url).path).name} (HTTP {error.code}). Try again shortly.') from None
+    except Exception:raise ValueError('Could not download the character. Check your connection and retry.') from None
     if len(raw)>limit:raise ValueError('Character asset exceeds the import size limit.')
     return raw
 
@@ -55,7 +61,8 @@ def import_source(link,destination,origins,fetch=download):
         with Image.open(destination/filename) as im:
             if im.format!='PNG' or im.width*im.height>16_777_216:raise ValueError('Invalid character art.')
             im.verify()
-    (destination/'character.json').write_text(json.dumps({'name':name,'display':name,'short':short},ensure_ascii=False)+'\n')
+    # ASCII-escaped JSON also reads correctly in older Windows locale encodings.
+    (destination/'character.json').write_text(json.dumps({'name':name,'display':name,'short':short})+'\n',encoding='utf-8')
     # Identity is content-based. Never persist the bearer URL in the public roster.
     signature=json.dumps({'name':name,'short':short,'files':{n:e['sha256'] for n,e in manifest['files'].items()}},sort_keys=True)
     return {'name':name,'short':short,'signature':hashlib.sha256(signature.encode()).hexdigest()}
@@ -104,16 +111,17 @@ class ImportManager:
                     existing=self.catalog.get(slug)
                     if existing:job.update(state='complete',message='Character is ready.',fighter=existing);return
                     ident='web-v1-'+hashlib.sha256(slug.encode()).hexdigest()[:16]
-                    output=self.workspace/'build/characters'/ident;imported=self.workspace/'assets/characters'/ident
-                    # Keep failed-attempt diagnostics instead of deleting source files.
-                    for folder in [output,imported]:
-                        if folder.exists():folder.rename(self.root/(folder.parent.name+'-'+ident+'-'+uuid.uuid4().hex))
-                    progress('Retargeting your character for Melee…')
-                    commands=[['tools/build_character.py',str(source),'--id',ident,'--target',target],['tools/upgrade_character_surfaces.py',ident],['tools/build_browser_skin_costume.py',ident]]
-                    for args in commands:
-                        result=subprocess.run([sys.executable,*args],cwd=ROOT,capture_output=True,text=True,timeout=240)
-                        with (self.root/(job['id']+'.log')).open('a') as log:log.write(result.stdout+result.stderr)
-                        if result.returncode:raise ValueError('This character needs a retarget correction before it can play. Its source assets were preserved for diagnosis.')
+                    archive_previous_build(self.workspace,ident)
+                    commands=[('Fitting character',['tools/build_character.py',str(source),'--id',ident,'--target',target]),
+                              ('Preparing textures and artwork',['tools/upgrade_character_surfaces.py',ident]),
+                              ('Building playable costume',['tools/build_browser_skin_costume.py',ident])]
+                    try:
+                        for stage,args in commands:
+                            progress(stage+'…');job['stage']=stage
+                            run_stage(args,self.workspace,self.root/(job['id']+'.log'),stage,target)
+                    except Exception:
+                        shutil.copytree(source,self.root/('failed-source-'+job['id']),dirs_exist_ok=True)
+                        raise
                     art=self.root/(slug+'.webp')
                     with Image.open(source/'portrait_raw.png') as im:im.thumbnail((180,172));im.convert('RGB').save(art,'WEBP',quality=90)
                     row={'slug':slug,'name':info['name'],'short':info['short'],'target':target,'portrait':f'/api/imports/portraits/{slug}.webp','imported':True}
