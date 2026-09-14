@@ -2,6 +2,7 @@
 from bisect import bisect_right
 from .archive import Archive
 from .target_presentation import ATTACHMENTS
+from .costume_forms import form_joints
 
 VERSION = 3
 BLOCKS = {0:(8,8,32), 1:(8,4,32), 2:(8,4,32), 3:(4,4,32),
@@ -16,6 +17,7 @@ def compact_body_textures(raw, skeleton, profile):
     if a.external:
         return raw, 0
     keep = set(profile.get('preserve_attachment_joints', ATTACHMENTS.get(profile.get('base_fighter'), [])))
+    keep.update(form_joints(profile))
     images, retained, displays, retained_displays = {}, set(), {}, set()
     for joint in skeleton:
         dobj = joint['dobj']

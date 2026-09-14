@@ -197,7 +197,9 @@ def replace_costume(archive, mesh, skeleton, profile):
     selected = None
     visited = set()
     from .target_presentation import ATTACHMENTS
+    from .costume_forms import form_joints, VERSION as FORMS_VERSION
     attachments=profile.get('preserve_attachment_joints',ATTACHMENTS.get(profile.get('base_fighter'), []))
+    retained = set(attachments) | set(form_joints(profile))
     if any(type(i) is not int or not 0 <= i < len(skeleton) for i in attachments):
         raise ValueError('Invalid preserved attachment joint')
     for j in skeleton:
@@ -211,7 +213,7 @@ def replace_costume(archive, mesh, skeleton, profile):
                 selected = d
             # Keep every DObj and its material descriptor alive for fighter
             # material/visibility tables; suppress only its original geometry.
-            if j['index'] not in attachments:
+            if j['index'] not in retained:
                 archive.pointer(d+12,None)
             d = archive.ptr(d+4)
             index += 1
@@ -258,6 +260,6 @@ def replace_costume(archive, mesh, skeleton, profile):
             attach(archive,owner['dobj'],mesh["presentation"],portrait,profile.get("stature"))
     # Preserve all skeleton flags; enable normals for the custom model owner.
     archive.pack('I',owner['offset']+4,owner['flags'] | 0x80)
-    return dict(texture_slot_version=1,vertices=len(mesh['positions']),triangles=len(mesh['triangles']),
+    return dict(texture_slot_version=1,costume_forms_version=FORMS_VERSION,vertices=len(mesh['positions']),triangles=len(mesh['triangles']),
                 draw_batches=count,unique_envelopes=len(set(mesh['envelopes'])),
                 preserved_joints=len(skeleton),preserved_dobjs=len(visited))

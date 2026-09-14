@@ -362,7 +362,9 @@ class Handler(BaseHTTPRequestHandler):
                 stats_path = output / skin_folder / 'stats.json'
                 stats = json.loads(stats_path.read_text()) if stats_path.is_file() else {}
                 from opensmash_melee.costume_memory import VERSION as MEMORY_VERSION
-                if not (output / skin_folder / f'Pl{code}Nr.dat').is_file() or stats.get('texture_slot_version') != 1 or stats.get('memory_layout_version') != MEMORY_VERSION:
+                from opensmash_melee.costume_forms import forms_current
+                profile = json.loads((output / 'profile.json').read_text())
+                if not (output / skin_folder / f'Pl{code}Nr.dat').is_file() or stats.get('texture_slot_version') != 1 or stats.get('memory_layout_version') != MEMORY_VERSION or not forms_current(stats, profile):
                     try:
                         run_stage(['tools/build_browser_skin_costume.py',ident,*(['--compact'] if compact else [])],
                                   ROOT,ROOT/'build/character-imports'/(ident+'.log'),'Building playable costume',target)

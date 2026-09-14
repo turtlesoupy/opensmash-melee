@@ -7,6 +7,7 @@ import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from opensmash_melee.__main__ import ROOT, atomic_write, digest
 from opensmash_melee.surfaces import SURFACE_VERSION, refine_profile
+from opensmash_melee.costume_forms import forms_current
 
 
 def upgrade(ident, library_source=None):
@@ -118,7 +119,7 @@ def upgrade_presentation(ident, library_source=None):
     for path in list(output.glob("Pl*Nr.dat"))+list((output/"browser").glob("Pl*Nr.dat")):
         meta=path.with_suffix(".dat.json")
         stats=json.loads(meta.read_text()) if meta.exists() else {}
-        if stats.get("presentation_source_sha256")==source_hash and stats.get("output_sha256")==digest(path):continue
+        if stats.get("presentation_source_sha256")==source_hash and stats.get("output_sha256")==digest(path) and forms_current(stats, profile):continue
         from opensmash_melee.archive import Archive
         from opensmash_melee.skeleton import joints
         from opensmash_melee.glb import GLB
