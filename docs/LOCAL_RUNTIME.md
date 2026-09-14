@@ -141,7 +141,9 @@ trace and phase counters; profiled runs cannot certify frame rate. Without
 `profile=phases`, `MELEE_TRACE=1` records a V8 CPU profile of the normal build
 from launch onward, kept even when the run fails. `MELEE_CHROME_ARGS` passes
 diagnostic Chrome flags (for example `--js-flags=--no-liftoff`); such runs are
-not acceptance evidence.
+not acceptance evidence. `MELEE_BROWSER_PROFILE=<dir>` reuses a Chrome profile
+across runs to measure a returning visitor with Chrome's WebAssembly code
+cache; the default fresh profile measures a first visit.
 
 The browser build produces gzip sidecars at build time. The local server serves
 those to supporting clients with the original MIME type. Runtime URLs carry a

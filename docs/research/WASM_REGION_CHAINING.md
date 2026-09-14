@@ -215,3 +215,32 @@ excess is 0.03–1.5 ms). Fountain of Dreams with the heavy lineup remains the
 one case that is short in steady state. Reducing first-window warm-up (for
 example compiling the module before the character select) is the next
 target after Fountain.
+
+## Warm-up and Chrome's WebAssembly code cache
+
+The below-60 first window is V8 tiering: the module runs as Liftoff baseline
+code until TurboFan finishes optimizing the hot regions on background threads,
+which takes the first 10–15 seconds of combat on a fresh browser profile. It is
+not a code path the runtime controls.
+
+The harness's fresh profile per run measures a first-ever visit. With
+`MELEE_BROWSER_PROFILE=<dir>` the profile persists, which measures a returning
+visitor: Chrome writes the optimized module to its WebAssembly code cache after
+TurboFan completes (about 420 MB on disk for this module, in
+`Default/Code Cache/wasm`) and later visits start from it. Measured on the
+Final Destination lineup `2,20,9,19`:
+
+| Visit | Build | Playable at | FPS windows | p95 ms |
+| --- | --- | --- | --- | --- |
+| first (fresh) | chained | 13.6 s | 59.57, 59.30, 59.94 | 19.7, 17.6, 17.7 |
+| first (fresh) | chained | 13.6 s | 58.97, 59.94, 59.96 | 20.5, 17.6, 17.6 |
+| third (cached) | chained | 9.0 s | 57.35, 59.94, 59.93 | 20.7, 16.9, 16.9 |
+| first (fresh) | f60 | 13.7 s | 59.10, 59.94, 59.93 | 19.7, 18.0, 17.8 |
+| second (cached) | f60 | 11.3 s | 59.06, 59.94, 59.93 | 19.5, 17.2, 16.9 |
+
+One earlier chained first visit collapsed to about 15 FPS for twenty seconds
+mid-match while the cache was being written, and the following visit timed out
+loading it; neither reproduced in two further fresh visits, so this is noted,
+not established. Chrome offers no site-side opt-out; if it ever proves
+necessary, instantiating from an ArrayBuffer through Emscripten's
+`instantiateWasm` hook bypasses the cache (only the streaming APIs are cached).

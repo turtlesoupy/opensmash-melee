@@ -19,7 +19,10 @@ const fs=require('node:fs'),path=require('node:path');
  if(strictWindows&&measuredWindows<3)throw Error('Strict windows require MELEE_WINDOWS >= 3');
  if(!Number.isInteger(measuredWindows)||measuredWindows<0||(measuredWindows>0&&measuredWindows<3))throw Error('MELEE_WINDOWS must be 0 or at least 3');
  fs.mkdirSync(output,{recursive:true});
- const profileDirectory=fs.mkdtempSync(path.join(output,'profile-'));
+ // A persistent profile (MELEE_BROWSER_PROFILE) measures a returning visitor: Chrome's
+ // WebAssembly code cache skips baseline compilation of the module on later loads.
+ const profileDirectory=process.env.MELEE_BROWSER_PROFILE?path.resolve(process.env.MELEE_BROWSER_PROFILE):fs.mkdtempSync(path.join(output,'profile-'));
+ if(process.env.MELEE_BROWSER_PROFILE)fs.mkdirSync(profileDirectory,{recursive:true});
  const chromeArgs=(process.env.MELEE_CHROME_ARGS||'').split(/\s+/).filter(Boolean); // diagnostics only, e.g. --js-flags=--no-liftoff
  const context=await chromium.launchPersistentContext(profileDirectory,{channel:'chrome',headless:false,viewport:{width:1200,height:900},ignoreDefaultArgs:['--mute-audio'],args:chromeArgs});
  const page=context.pages()[0],cdp=process.env.MELEE_TRACE?await context.newCDPSession(context.pages()[0]):null;
@@ -113,6 +116,6 @@ const fs=require('node:fs'),path=require('node:path');
   fs.writeFileSync(path.join(output,'samples.json'),JSON.stringify(samples,null,2));
   fs.writeFileSync(path.join(output,'errors.json'),JSON.stringify(errors,null,2));
   await context.close();
-  if(process.env.MELEE_KEEP_BROWSER_PROFILE!=='1')fs.rmSync(profileDirectory,{recursive:true,force:true});
+  if(process.env.MELEE_KEEP_BROWSER_PROFILE!=='1'&&!process.env.MELEE_BROWSER_PROFILE)fs.rmSync(profileDirectory,{recursive:true,force:true});
  }
 })().catch(error=>{console.error(error);process.exitCode=1;});
