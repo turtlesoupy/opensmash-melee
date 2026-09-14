@@ -82,6 +82,7 @@ static void css_enter_identity(CPUState* s){
     fprintf(stderr,"[opensmash] CSS injection entries=%u pages=%u page=%u\n",css_count,css_pages,css_page);
 }
 static void css_exit_identity(CPUState* s){
+    intro_capture(s,css_registry,css_count);
     if(css_registry)for(unsigned i=0;i<4;i++)css_keep_color(s,i);
 }
 static void css_exited_identity(CPUState* s){(void)s;css_registry=css_count=0;}
@@ -141,6 +142,10 @@ static void css_voice_patch(CPUState* s){
         s->gpr[3]=read32(s,css_row(n)+12);
         s->fpr[1]=s->fpr[2]=1.; /* WAVs are already recorded at their intended pitch. */
         fprintf(stderr,"[opensmash] CSS announcer entry=%u sample=%u\n",n,s->gpr[3]);
+    }
+    if(intro_active && track==INTRO_TRACK && intro_sample){
+        s->gpr[3]=intro_sample;s->fpr[1]=s->fpr[2]=1.;
+        fprintf(stderr,"[opensmash] intro custom voice sample=%u\n",intro_sample);
     }
     /* Retail entry: mflr r0. Keep the original mixer, volume and voice groups. */
     s->gpr[0]=s->lr;s->pc=0x803896F4;

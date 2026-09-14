@@ -149,11 +149,12 @@ class CharacterSelectTests(unittest.TestCase):
         from opensmash_melee.skeleton import joints
         original = (ROOT / 'assets/game/files/MnSlChr.usd').read_bytes()
         digest = hashlib.sha256(original).hexdigest()
-        raw = extend_menu(original, [(8, 1, self.source), (8, 2, self.source), (2, 0, self.source)], [318, 319, 320])
+        raw = extend_menu(original, [(8, 1, self.source), (8, 2, self.source), (2, 0, self.source)], [318, 319, 320], {self.source: 1234})
         a, old = Archive(raw), Archive(original)
         record = a.roots()[SYMBOL]
         self.assertEqual(a.unpack('4I', record), (0x4F534353, 1, 3, 3))
         self.assertEqual([a.u32(record + 16 + i * 32 + 8) for i in range(3)], [1, 2, 1])
+        self.assertEqual([a.u32(record + 16 + i * 32 + 28) for i in range(3)], [1234] * 3)
         for offset in (64, 112):
             for archive in (a, old):
                 archive.public.append((archive.ptr(offset), len(archive.strings)))

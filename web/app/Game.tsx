@@ -3,6 +3,7 @@ import {plan,schema,type Settings} from '@/lib/launch';
 import type {Fighter} from './page';
 import {names} from './page';
 import {connectAudio,unlockAudio} from '@/lib/audio';
+import {stopAnnouncer} from '@/lib/announcer';
 import {claimMelee,releaseMelee} from '@/lib/melee-session';
 import {keyLabel,loadBindings,type Action} from '@/lib/controls';
 // GameCube button bits in the pad word, keyed by the control id from the bindings module.
@@ -83,6 +84,7 @@ export default function Game({fighter,settings,roster,onClose}:{fighter:Fighter;
     if(data.type==='frame' && settings.mode===4 && selectionAcknowledged && !fullBootVisible){fullBootVisible=true;setStatus('');}
     if(data.type==='status' && !fullBootVisible)setStatus(data.message);
     if(data.type==='started'){running=true;}
+    if(data.type==='intro'){stopAnnouncer();setStatus('');startAudio();}
     if(data.type==='playable'){playable=true;setStatus('');startAudio();}
     if(data.type==='error'){setError(previous=>previous||data.message);running=false;}
     if(data.type==='log'){console.log('[Melee]',data.text);if(playable&&data.text.includes('[opensmash] destination ready'))setStatus('');}

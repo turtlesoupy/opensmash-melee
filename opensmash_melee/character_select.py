@@ -195,7 +195,7 @@ def arrow_joint(a, direction):
     return joint
 
 
-def extend_menu(raw, entries, sound_ids):
+def extend_menu(raw, entries, sound_ids, durations=None):
     a = Archive(raw)
     if SYMBOL in a.roots():
         raise ValueError('Character select must be staged from the original menu')
@@ -207,6 +207,7 @@ def extend_menu(raw, entries, sound_ids):
         pages[fighter] = pages.get(fighter, 0) + 1
         row = record + 16 + i * 32
         a.pack('4I', row, fighter, color, pages[fighter], sound)
+        a.pack('I', row + 28, durations[source] if durations else 2500)
         a.pointer(row + 16, image_descriptor(a, portrait(source, (64, 56))))
         a.pointer(row + 20, image_descriptor(a, portrait(source, (160, 192), label=False)))
         info = json.loads((source / 'character.json').read_text())
@@ -253,7 +254,7 @@ def character_select_assets(game, entries, *, cache=None):
     names = ('audio/nr_select.ssm', 'audio/us/nr_select.ssm', 'MnSlChr.dat', 'MnSlChr.usd')
     cached = None
     if cache is not None:
-        digest = hashlib.sha256(b'opensmash-character-select-assets-v1\0')
+        digest = hashlib.sha256(b'opensmash-character-select-assets-v2\0')
         def add(raw):
             digest.update(len(raw).to_bytes(8, 'big'))
             digest.update(raw)
@@ -277,7 +278,9 @@ def character_select_assets(game, entries, *, cache=None):
         path = game / 'files/audio' / suffix / 'nr_select.ssm'
         outputs[path], ids = extend_sound_bank(path.read_bytes(), [e[2] for e in normalized], clips=clips)
         menu = game / ('files/MnSlChr.usd' if suffix else 'files/MnSlChr.dat')
-        outputs[menu] = extend_menu(menu.read_bytes(), normalized, ids)
+        outputs[menu] = extend_menu(menu.read_bytes(), normalized, ids,
+                                    {source: (clip[2] * 1000 + clip[1] - 1) // clip[1]
+                                     for source, clip in clips.items()})
     result = {path.relative_to(game / 'files').as_posix(): data for path, data in outputs.items()}
     if cached is not None:
         temporary = cached.with_suffix('.' + uuid.uuid4().hex + '.tmp')

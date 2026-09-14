@@ -160,7 +160,9 @@ static void scene_main(CPUState* s) {
             launch_mode,arena,cpu_level,stocks,minutes,port_config[0],port_config[1],port_config[2],port_config[3]);
     if(launch_mode==4)original_pacing=1;
 }
+static void intro_reset(CPUState* s);
 static void change_mode(CPUState* s) {
+    intro_reset(s);
     unsigned next = s->gpr[3];
     if (requested && !routed && launch_mode!=4) {
         next=launch_mode==1?1:launch_mode==3?3:2;routed=1;
@@ -599,9 +601,14 @@ static void damage_emblem(CPUState* s) {
         return;
     }
 }
+#include "vs_intro.h"
 #include "character_select.h"
 
 static const ModernGekkoModHook hooks[] = {
+    RECOMP_HOOK(0x801B1588, intro_vs_enter),
+    RECOMP_HOOK(0x80160DE8, intro_name_begin),
+    RECOMP_HOOK(0x803910D8, intro_camera),
+    RECOMP_HOOK(0x80186DFC, intro_frame),
     RECOMP_HOOK(0x801B0264, boot_card_enter),
     RECOMP_HOOK(0x801B0304, boot_card_exit),
     RECOMP_HOOK(0x801AF568, boot_card_input),
@@ -640,6 +647,11 @@ static const ModernGekkoModHook hooks[] = {
     RECOMP_HOOK(0x80388278, report_assert),
 };
 static const ModernGekkoModPatch patches[] = {
+    RECOMP_PATCH(0x801A40B4, intro_scene_ready),
+    RECOMP_PATCH(0x80184AB8, intro_animation),
+    RECOMP_PATCH(0x80168C5C, intro_announce),
+    RECOMP_PATCH(0x800243F4, intro_voice_track),
+    RECOMP_PATCH(0x8002702C, intro_audio_banks),
     RECOMP_PATCH(0x80160980, css_name_patch),
     RECOMP_PATCH(0x803896F0, css_voice_patch),
     RECOMP_PATCH(0x800674F8, flash_return_patch),

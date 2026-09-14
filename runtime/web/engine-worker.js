@@ -9,6 +9,7 @@ const buttonUntilFrame = new Uint32Array(64);
 let phase = 'worker startup';
 let skinVerificationComplete = false;
 let combatReached = false, startupReported = false, firstPlayableAt=0;
+let introSamples=[],introLastFrame=0,introStarted=0,introReported=false;
 let preparationSamples=[], preparationLastFrame=0, preparationReleased=false, preparationStarted=0, preparationFailed=false;
 const costumeSizes=new Map();
 let runtimeBuild, startOptions, activeSelection, readyForSelection = false;
@@ -93,6 +94,9 @@ self.onmessage = async ({data}) => {
     engine = await createMelee({
       canvas: new OffscreenCanvas(960, 720),
       onFrame: bitmap => {
+        const intro=engine?._opensmash_intro_state?.()||0;
+        if(intro===1){introReported=false;bitmap.close();return;}
+        if(intro===2&&!introReported){introReported=true;report('intro',{});}
         const preparing=activeSelection?.launch?.mode===0 && engine?._opensmash_preparation_state && engine._opensmash_preparation_state()!==4;
         if(combatReached && preparing) {bitmap.close();return;}
         postMessage({type: "frame", bitmap}, [bitmap]);
@@ -246,17 +250,16 @@ self.onmessage = async ({data}) => {
       audioIndices=indices;
       setInterval(() => {
         let write = Atomics.load(indices, 0), read = Atomics.load(indices, 1);
-        if(activeSelection?.launch?.mode===0 && !preparationReleased) {
-          // Drain startup sound rather than replaying it after the loading screen.
-          engine._opensmash_audio_mix();Atomics.store(indices,1,write);return;
-        }
+        // Keep the connected worklet fed with silence during scene loading.
+        const muted=activeSelection?.launch?.mode===0 && !preparationReleased && engine._opensmash_intro_state?.()!==2;
+        if(muted)engine._opensmash_audio_mix();
         // Keep 64 ms queued so short shader/GC scheduling hiccups do not
         // empty the audio ring. This changes audio buffering, not game speed.
         while (((write-read+capacity)%capacity) < 3072) {
-          const pointer = engine._opensmash_audio_mix() >>> 1;
+          const pointer = muted?0:engine._opensmash_audio_mix() >>> 1;
           for(let i=0;i<512;i++)for(let channel=0;channel<2;channel++)
-            ring[((write+i)%capacity)*2+channel] = engine.HEAP16[pointer+i*2+channel]/32768;
-          for(let i=0;i<1024;i++)audioPeak=Math.max(audioPeak,Math.abs(engine.HEAP16[pointer+i]));
+            ring[((write+i)%capacity)*2+channel] = muted?0:engine.HEAP16[pointer+i*2+channel]/32768;
+          if(!muted)for(let i=0;i<1024;i++)audioPeak=Math.max(audioPeak,Math.abs(engine.HEAP16[pointer+i]));
           audioBlocks++;
           write=(write+512)%capacity;
           Atomics.store(indices,0,write);
@@ -265,7 +268,21 @@ self.onmessage = async ({data}) => {
       }, 10);
     }
     setInterval(()=>{
-      if(preparationFailed || engine._opensmash_preparation_state?.()!==2)return;
+      if(preparationFailed)return;
+      if(engine._opensmash_intro_state?.()===1){
+        if(!introStarted){introStarted=performance.now();report('status',{message:'Preparing the matchup…'});}
+        if(performance.now()-introStarted>60000){preparationFailed=true;report('error',{message:'The matchup could not finish preparing. Try closing other running games.'});return;}
+        const count=engine._opensmash_frame_count();
+        if(!introLastFrame)introLastFrame=count;
+        for(let i=introLastFrame;i<count;i++)introSamples.push(engine._opensmash_frame_interval(i)/1000);
+        introLastFrame=count;introSamples=introSamples.slice(-30);
+        if(sceneReady(introSamples)){
+          engine._opensmash_finish_intro_preparation();
+          introSamples=[];introLastFrame=0;introStarted=0;
+        }
+        return;
+      }
+      if(engine._opensmash_preparation_state?.()!==2)return;
       if(!preparationStarted)preparationStarted=performance.now();
       if(performance.now()-preparationStarted>60000) {
         preparationFailed=true;
