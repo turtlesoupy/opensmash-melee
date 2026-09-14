@@ -31,6 +31,53 @@ static void journal(u32 a, u32 size, void *u) { record((CPUState *)u, a, 0, 200 
 static u64 hook_bits[0x00400000u / 4 / 64];
 static u8 chunk_state[OPENSMASH_CHAIN_CHUNKS];
 static u8 chunk_forced[OPENSMASH_CHAIN_CHUNKS];
+// Actual Melee call/return into OSGetTime: exercise static and dynamic chains,
+// every sub-tick remainder, and the low-word rollover read through mftbu/mftb.
+static unsigned check_timebase(void) {
+  static u8 ram[65536];
+  unsigned cases = 0;
+  memset(chunk_state, 1, sizeof(chunk_state));
+  memset(chunk_forced, 0, sizeof(chunk_forced));
+  memset(hook_bits, 0, sizeof(hook_bits));
+  const u32 stop = 0x8001C904u - 0x80000000u;
+  hook_bits[stop >> 8] |= (u64)1 << ((stop >> 2) & 63);
+  opensmash_chain_hook_bits = hook_bits;
+  opensmash_chain_chunk_state = chunk_state;
+  opensmash_chain_chunk_forced = chunk_forced;
+  for (unsigned dynamic = 0; dynamic < 2; ++dynamic)
+    for (unsigned rollover = 0; rollover < 2; ++rollover)
+      for (unsigned remainder = 0; remainder < 12; ++remainder) {
+        CPUState a = {0}, b;
+        a.ram = ram;
+        a.ram_size = sizeof(ram);
+        a.pc = dynamic ? 0x8001C54Cu : 0x8001C900u;
+        a.lr = 0x8034C3F0u;
+        a.timebase = rollover ? 0xFFFFFFFFull : 100;
+        b = a;
+        opensmash_chain_tb_base = a.timebase;
+        opensmash_chain_tb_cycles = remainder;
+        opensmash_chain_budget = dynamic ? 2 : 256;
+        opensmash_chain_mark = 0;
+        opensmash_chain_ctx = &a;
+        if (!dolrecomp_call_original(&a, a.pc)) abort();
+        opensmash_chain_ctx = NULL;
+        if (!dolrecomp_call_original(&b, b.pc)) abort();
+        // Independently model RunImpl's post-dispatch charge and TB update.
+        const u64 charge = b.downcount < 0 ? (u64)-b.downcount : 1;
+        b.downcount = 0;
+        b.timebase += (remainder + charge) / 12;
+        if (!dolrecomp_call_original(&b, b.pc)) abort();
+        if (a.pc != b.pc || a.gpr[3] != b.gpr[3] || a.gpr[4] != b.gpr[4] ||
+            a.gpr[5] != b.gpr[5] || (u64)-a.downcount != charge + (u64)-b.downcount) {
+          fprintf(stderr, "timebase mismatch dynamic=%u rollover=%u remainder=%u r4=%u/%u\n",
+                  dynamic, rollover, remainder, a.gpr[4], b.gpr[4]);
+          return 0;
+        }
+        ++cases;
+      }
+  return cases;
+}
+
 int main(int argc, char **argv) {
   const unsigned total = OPENSMASH_CHAIN_CHUNKS;
   const unsigned first = argc > 1 ? (unsigned)strtoul(argv[1], NULL, 10) : 0;
@@ -39,6 +86,8 @@ int main(int argc, char **argv) {
     return 2;
   if (opensmash_chain_chunk_count != total)
     return 3;
+  const unsigned timebase_cases = check_timebase();
+  if (timebase_cases != 48) return 7;
   static unsigned char ra[65536], rb[65536], ea[65536], eb[65536];
   unsigned cases = 0, chained = 0, longest = 0;
   double chained_ms = 0, unchained_ms = 0;
@@ -91,6 +140,9 @@ int main(int argc, char **argv) {
           chunk_state[i] = (rnd() & 63) ? 1 : (rnd() & 1) ? 0 : 2;
           chunk_forced[i] = (rnd() & 127) == 0;
         }
+        const u64 tb_base = 0xFFFFFFF0ull;
+        const u64 tb_cycles = 1024 + (rnd() & 31);
+        a.timebase = tb_base + (tb_cycles - (u64)a.downcount) / 12;
         b = a;
         b.ram = rb;
         b.exram = eb;
@@ -105,6 +157,8 @@ int main(int argc, char **argv) {
         ppc_fpscr_updated(&a);
         opensmash_chain_ctx = &a;
         opensmash_chain_mark = a.downcount;
+        opensmash_chain_tb_base = tb_base;
+        opensmash_chain_tb_cycles = tb_cycles;
         double t0 = emscripten_get_now();
         if (!dolrecomp_call_original(&a, a.pc))
           return 4;
@@ -117,6 +171,7 @@ int main(int argc, char **argv) {
         ppc_fpscr_updated(&b);
         unsigned steps = 0;
         s64 mark = b.downcount;
+        u64 reference_tb_cycles = tb_cycles - (u64)b.downcount;
         double t1 = emscripten_get_now();
         for (;;) {
           opensmash_chain_last = 0xFFFFFFFFu;
@@ -132,11 +187,13 @@ int main(int argc, char **argv) {
           // The run loop charges at least one cycle per region transfer.
           if (b.downcount == mark)
             b.downcount -= 1;
+          reference_tb_cycles += (u64)(mark - b.downcount);
           mark = b.downcount;
           if (!opensmash_chain_would(&b, target, opensmash_chain_index(target)))
             break;
           if (!dolrecomp_find_original(target))
             break;
+          b.timebase = tb_base + reference_tb_cycles / 12;
         }
         unchained_ms += emscripten_get_now() - t1;
         if (steps > 1)
@@ -154,7 +211,7 @@ int main(int argc, char **argv) {
         }
         cases++;
       }
-  printf("{\"cases\":%u,\"chainedCases\":%u,\"longestChain\":%u,\"chainedMs\":%.1f,\"unchainedMs\":%.1f}\n",
-         cases, chained, longest, chained_ms, unchained_ms);
+  printf("{\"timebaseCases\":%u,\"cases\":%u,\"chainedCases\":%u,\"longestChain\":%u,\"chainedMs\":%.1f,\"unchainedMs\":%.1f}\n",
+         timebase_cases, cases, chained, longest, chained_ms, unchained_ms);
   return 0;
 }

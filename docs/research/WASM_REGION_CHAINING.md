@@ -316,3 +316,29 @@ remaining levers are generator-level: keeping guest registers in locals across
 a region, fusing condition-register updates, and avoiding the 256-way entry
 switch on chained transfers. Tried and rejected here for lack of demonstrated
 benefit: direct gather-pipe writes (two variants) and the inline FP check.
+
+
+## Audit fix: preserve timebase updates at chained transfers
+
+The original chain skipped the run loop's per-dispatch timebase update. A
+reproduction using Melee's call at `0x8001C900` into `OSGetTime` read 100 when
+chained versus 101 with the normal dispatcher at a tick boundary. The earlier
+chain oracle omitted that dispatcher update too, so its passing result did not
+cover clock equivalence.
+
+The runtime now publishes the burst timebase/cycle snapshot at dispatch entry.
+Before continuing into another region, the chain advances `ctx->timebase` using
+the same accumulated guest cycles and 12-cycle tick conversion as the run loop.
+It preserves sub-tick remainders, leaves cycle charging and interrupt budgets
+unchanged, and lets the outer dispatcher perform the final update when a chain
+ends. A compile-time assertion checks the conversion against Dolphin's ratio.
+
+The revised oracle independently accumulates cycles and updates its reference
+clock between regions. It passes 91,032 cases (57,983 chained), plus 48 targeted
+actual-game clock cases per shard: static calls, dynamic returns, all sub-tick
+remainders and low-word rollover. Runtime: `30e6328c416e85f6`; evidence:
+`build/audit-wasm/timebase-chain.log` and `timebase-build.log`. The PC-store
+boundary tests also pass. This is a correctness fix, not a new 60 FPS claim.
+
+The post-fix vanilla Fountain check measured 57.77, 58.07, 58.30 FPS, with zero audio underruns, no runtime errors and successful replay.
+It still failed the strict performance gate. Evidence: `build/audit-wasm/timebase-gameplay/`.

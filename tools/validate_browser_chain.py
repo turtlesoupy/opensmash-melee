@@ -41,12 +41,14 @@ def validate(skip_build=False):
         if result.returncode:
             raise RuntimeError(f'Chain regions {first}:{end} failed:\n{result.stderr}\n{result.stdout}')
         data = json.loads(result.stdout)
+        if data.get('timebaseCases') != 48:
+            raise RuntimeError('Missing timebase regression coverage')
         if data['cases'] != (end - first) * 4 * 6:
             raise RuntimeError(f'Incomplete chain coverage in regions {first}:{end}')
         return data
     with ThreadPoolExecutor(max_workers=workers) as pool:
         reports = list(pool.map(check_shard, range(workers)))
-    report = {'cases': sum(r['cases'] for r in reports),
+    report = {'timebaseCasesPerShard': 48, 'cases': sum(r['cases'] for r in reports),
               'chainedCases': sum(r['chainedCases'] for r in reports),
               'longestChain': max(r['longestChain'] for r in reports), 'shards': workers}
     if report['chainedCases'] == 0:
