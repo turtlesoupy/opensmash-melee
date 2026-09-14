@@ -293,3 +293,26 @@ measurable speed change on Fountain; kept for the smaller module and the
 complete oracle coverage. Fountain windows 2–3 on both builds were 57.2–59.8
 FPS with p95 of 18.1–21.2 ms on this (cool) machine state; first windows were
 57.1–57.9 FPS with p95 21.5–21.9 ms.
+
+## Rejected follow-up: inline FP-available check
+
+Every generated floating-point instruction first calls `ppc_fp_available`,
+an out-of-line function testing the lazy-FP setting and MSR.FP. Inlining the
+common case (MSR.FP set) with the exception path out of line passed both
+oracles but measured no gain: six alternating runs against the deferred-store
+control gave a median 16.45 versus 16.27 ms of CPU-thread time per frame
+(`build/independent-{fp,chainctl5}-series-{1,2,3}`), with the module 2 MB
+larger. Removed.
+
+## State at the end of the pass
+
+Committed runtime `072fb1a5a308df58` (chaining, MEM1-first, deferred stores in
+every region). On this machine in a cool state it holds 58–60 FPS in steady
+state on every roster matchup including Fountain, where windows 2–3 measured
+57.2–59.8 FPS with p95 of 18.1–21.2 ms; first windows and the slow machine
+state still miss the strict gate. The CPU thread remains about 95% busy, with
+about 64% of its time in the generated regions' instruction semantics. The
+remaining levers are generator-level: keeping guest registers in locals across
+a region, fusing condition-register updates, and avoiding the 256-way entry
+switch on chained transfers. Tried and rejected here for lack of demonstrated
+benefit: direct gather-pipe writes (two variants) and the inline FP check.
