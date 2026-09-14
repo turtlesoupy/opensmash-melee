@@ -192,3 +192,26 @@ Six alternating runs against the chained control
 A small gain, at the edge of run-to-run noise, kept because it has no
 correctness exposure and reduces code size. The MEM1-first build measured
 59.7, 58.4 and 58.5 FPS in its best windows with p95 of 18.8–20.7 ms.
+
+## Roster sweep on the committed build
+
+`tools/validate_wasm_roster.py` on build `306061dbf4003b33` (chaining plus
+MEM1-first), three strict windows per case, evidence in `build/independent-roster-01`:
+
+| Matchup | Stage | FPS windows | p95 ms | Gate |
+| --- | --- | --- | --- | --- |
+| original | 31 | 58.93, 59.13, 59.90 | 19.9, 17.9, 18.0 | Pass |
+| space-animals-swords | 32 | 58.46, 59.71, 59.57 | 21.2, 18.1, 18.1 | Fail (window 1 p95) |
+| heavyweights | 2 | 54.50, 58.29, 57.16 | 25.6, 20.6, 21.1 | Fail |
+| climbers-peach-samus-puff | 28 | 59.16, 59.93, 59.97 | 20.1, 17.9, 18.1 | Fail (window 1 p95 by 0.1 ms) |
+| psychic-transform | 3 | 58.27, 59.93, 59.94 | 21.5, 17.7, 17.6 | Fail (window 1) |
+| plumbers-swords | 31 | 59.55, 59.93, 59.97 | 19.3, 17.7, 17.8 | Pass |
+| remaining-stock | 32 | 58.42, 59.78, 59.47 | 20.0, 18.1, 18.0 | Fail (window 1 p95 by 0.03 ms) |
+
+No audio underruns or runtime errors in any case; replay passed everywhere.
+Windows 2 and 3 pass on six of seven matchups. Four of the five failures are
+the first window alone, where V8 is still optimizing the module (the p95
+excess is 0.03–1.5 ms). Fountain of Dreams with the heavy lineup remains the
+one case that is short in steady state. Reducing first-window warm-up (for
+example compiling the module before the character select) is the next
+target after Fountain.
