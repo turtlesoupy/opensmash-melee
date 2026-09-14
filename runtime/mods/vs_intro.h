@@ -191,7 +191,7 @@ static void intro_announce(CPUState* s){
         }
         if(intro_voice>=intro_count){s->pc=s->lr;return;}
         unsigned i=intro_voice++;s->gpr[3]=intro_fighters[i];intro_sample=intro_samples[i];
-        intro_next_sound=intro_elapsed+(intro_durations[i]*60+999)/1000+5;
+        intro_next_sound=intro_elapsed+(intro_durations[i]*60+999)/1000;
         fprintf(stderr,"[opensmash] intro announcer port=%u fighter=%u sample=%u\n",intro_ports[i],intro_fighters[i],intro_sample);
     }
     s->gpr[0]=s->lr;s->pc=0x80168C60;

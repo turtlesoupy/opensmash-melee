@@ -58,6 +58,20 @@ class CharacterSelectTests(unittest.TestCase):
             wav.setparams((1, 2, 32000, 0, 'NONE', 'not compressed'))
             wav.writeframes(self.samples.tobytes())
 
+    def test_announcer_trims_only_quiet_edges(self):
+        voice = np.concatenate([np.full(1600, 8000), np.zeros(3200), np.full(1600, -8000)]).astype('<i2')
+        padded = np.concatenate([np.zeros(3200), voice, np.zeros(6400)]).astype('<i2')
+        path = self.source / 'padded.wav'
+        with wave.open(str(path), 'wb') as wav:
+            wav.setparams((1, 2, 32000, len(padded), 'NONE', 'not compressed'))
+            wav.writeframes(padded.tobytes())
+        cache = self.source / 'trim-cache'
+        original = dsp_clip(path, cache)
+        trimmed = dsp_clip(path, cache, trim=True)
+        self.assertEqual(original[2], len(padded))
+        self.assertEqual(trimmed[1:3], (32000, len(voice) + 960))
+        self.assertEqual(trimmed, dsp_clip(path, cache, trim=True))
+
     def test_announcer_roundtrip_preserves_duration_rate_and_signal(self):
         raw, rate, count, coefficients = dsp_clip(self.source / 'announcer.wav')
         decoded, h1, h2 = [], 0, 0

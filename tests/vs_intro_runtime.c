@@ -66,7 +66,7 @@ int main(void) {
     }
     assert(rd(&s,0x804735E0,2)==99);
     /* Announcer uses the selected identity and clip duration for each port. */
-    intro_elapsed=100;intro_announce(&s);assert(s.gpr[3]==8&&intro_next_sound==159);
+    intro_elapsed=100;intro_announce(&s);assert(s.gpr[3]==8&&intro_next_sound==154);
     s.gpr[9]=INTRO_TRACK;css_voice_patch(&s);assert(s.gpr[3]==0x7017);
     intro_announce(&s);assert(s.gpr[3]==0x9C4A&&intro_voice==1);
     intro_announce(&s);s.gpr[9]=INTRO_TRACK;css_voice_patch(&s);assert(s.gpr[3]==0x7018);

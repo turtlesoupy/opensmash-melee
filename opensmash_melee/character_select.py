@@ -56,7 +56,7 @@ def portrait(source, size, label=True):
     return canvas
 
 
-def dsp_clip(path, cache=None):
+def dsp_clip(path, cache=None, *, trim=False):
     """Encode Nintendo DSP ADPCM with a deterministic first-order predictor.
 
     Source announcers are short mono PCM recordings. Search each block's scale
@@ -74,10 +74,18 @@ def dsp_clip(path, cache=None):
         if width != 2 or channels not in (1, 2) or not 8000 <= rate <= 48000 or not 0 < count <= rate * 15:
             raise ValueError('Announcer must be a mono/stereo 16-bit PCM WAV, at most 15 seconds')
         samples = np.frombuffer(wav.readframes(count), dtype='<i2').reshape(-1, channels).mean(axis=1).tolist()
+    if trim:
+        # Remove only quiet edges; retain 15 ms around speech and all internal pauses.
+        signal = np.asarray(samples)
+        audible = np.flatnonzero(np.abs(signal) > max(32, np.max(np.abs(signal)) * .005))
+        if len(audible):
+            padding = rate * 15 // 1000
+            samples = samples[max(0, int(audible[0]) - padding):min(count, int(audible[-1]) + padding + 1)]
+            count = len(samples)
     coefficients = [(0, 0), (2048, 0), (4096, -2048), (3072, -1024)] + [(0, 0)] * 4
     cached = None
     if cache is not None:
-        cached = Path(cache) / (hashlib.sha256(b'opensmash-dsp-v1\0' + raw).hexdigest() + '.dsp')
+        cached = Path(cache) / (hashlib.sha256(b'opensmash-dsp-v2\0' + bytes([trim]) + raw).hexdigest() + '.dsp')
         try:
             stored = cached.read_bytes()
             data = stored[32:]
@@ -254,7 +262,7 @@ def character_select_assets(game, entries, *, cache=None):
     names = ('audio/nr_select.ssm', 'audio/us/nr_select.ssm', 'MnSlChr.dat', 'MnSlChr.usd')
     cached = None
     if cache is not None:
-        digest = hashlib.sha256(b'opensmash-character-select-assets-v2\0')
+        digest = hashlib.sha256(b'opensmash-character-select-assets-v3\0')
         def add(raw):
             digest.update(len(raw).to_bytes(8, 'big'))
             digest.update(raw)
@@ -273,7 +281,7 @@ def character_select_assets(game, entries, *, cache=None):
     # Build all outputs before replacing any staged hard links.
     outputs = {}
     sources = list(dict.fromkeys(e[2] for e in normalized))
-    clips = {source: dsp_clip(source / 'announcer.wav', cache) for source in sources}
+    clips = {source: dsp_clip(source / 'announcer.wav', cache, trim=True) for source in sources}
     for suffix in ('', 'us/'):
         path = game / 'files/audio' / suffix / 'nr_select.ssm'
         outputs[path], ids = extend_sound_bank(path.read_bytes(), [e[2] for e in normalized], clips=clips)

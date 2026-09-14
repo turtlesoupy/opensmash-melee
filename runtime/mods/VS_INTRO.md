@@ -14,7 +14,8 @@ Custom identities are copied from the injected character-select registry before
 its archive is released. Names and announcer samples are matched by fighter and
 costume color, so different characters can share a moveset. The registry stores
 clip durations to sequence names. The first name starts after one-third of a
-second, followed by “versus,” then the remaining names, with short gaps.
+second, followed by “versus,” then the remaining names, with no added inter-name gap. Custom recordings have
+quiet leading/trailing edges trimmed, preserving 15 ms around speech.
 Vanilla fighters use Melee's
 name scripts. A or Start skips the intro after its first half-second.
 
