@@ -244,3 +244,29 @@ loading it; neither reproduced in two further fresh visits, so this is noted,
 not established. Chrome offers no site-side opt-out; if it ever proves
 necessary, instantiating from an ArrayBuffer through Emscripten's
 `instantiateWasm` hook bypasses the cache (only the streaming APIs are cached).
+
+## Fountain: where the CPU thread's time goes now
+
+CPU-thread profile of the committed build on the heavy Fountain lineup
+(`build/independent-fountain-final-profile`, 30-second window; the profiled
+window itself ran at 45 FPS because tracing perturbs the run):
+
+| CPU-thread self time | Seconds | Share |
+| --- | --- | --- |
+| Recompiled game regions (plus entry-specialized references) | 19.25 | 64% |
+| PPC helpers (paired-single loads/stores, FP operations) | 2.41 | 8% |
+| FIFO write path (write hook, external write, gather pipe, RunGpu) | 3.39 | 11% |
+| Run loop, dispatch and chain checks | 1.72 | 6% |
+| Waiting on the GPU thread at idle | 0.77 | 3% |
+| Everything else | about 2.4 | 8% |
+
+The dispatch overhead that chaining targeted is gone from the top of the list.
+What remains is the generated code itself: per-instruction PC stores outside
+the 512 specialized regions, bounds-checked big-endian memory access, and flag
+updates. Reaching a steady 60 on Fountain needs roughly 10% less CPU-thread
+work, and the remaining levers are generator-level: extend deferred PC stores
+to every region (the entry-hint generator is not in the repository; a
+deferral-only pass with a test-only reference archive would avoid module
+growth), avoid the 256-way entry switch on chained transfers into function
+starts, and keep guest registers in locals across a region. The FIFO path was
+tried directly and did not pay (above).
