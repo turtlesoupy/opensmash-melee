@@ -172,3 +172,23 @@ Evidence: `build/independent-{gp,chainctl}-series-{1,2,3}` and
 During the second series, with the machine cool, the chained control measured
 individual windows of 59.3, 59.8 and 59.4 FPS with p95 of 19.2–19.6 ms, so the
 retained runtime does reach the gate in a good machine state.
+
+## Retained follow-up: MEM1 before EXRAM in guest memory access
+
+`0006-wasm-mem1-first.patch` reorders `get_ram_ptr` in the browser build so
+the MEM1 range is tested before the Wii EXRAM pointer. GameCube titles have no
+EXRAM, so every guest load and store previously paid a load and branch on a
+null pointer before the RAM hit. The two ranges do not overlap, so the result is
+identical for every address; both oracles pass. Module: 129,016,825 bytes.
+
+Six alternating runs against the chained control
+(`build/independent-{m1,chainctl3}-series-{1,2,3}`), windows 2–3:
+
+| Build | Median FPS | Median CPU-thread ms per frame | Better in paired windows |
+| --- | --- | --- | --- |
+| MEM1 first | 58.2 | 16.52 | 4 of 6 |
+| Chained control | 56.5 | 17.09 | 2 of 6 |
+
+A small gain, at the edge of run-to-run noise, kept because it has no
+correctness exposure and reduces code size. The MEM1-first build measured
+59.7, 58.4 and 58.5 FPS in its best windows with p95 of 18.8–20.7 ms.

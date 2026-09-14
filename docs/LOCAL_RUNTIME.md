@@ -48,6 +48,7 @@ For ROM-first Apple Silicon app builds, see [NATIVE.md](NATIVE.md).
 - Region chaining: cross-region calls, returns and branches continue directly
   into the target region under the run loop's own dispatch conditions instead
   of returning to C++ for every transfer.
+- Guest memory access tests MEM1 before the (absent) Wii EXRAM range.
 - WebGL 2 renderer with a separate capability-probe canvas; the real canvas moves
   directly to the CPU/GPU worker. Explicit ImageBitmap presentation lets the game
   retain its synchronous loop without blocking the browser UI.
