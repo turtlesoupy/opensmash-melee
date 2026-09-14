@@ -151,3 +151,24 @@ rerun on the chained runtime.
 - Per-thread renderer sampling and profile analysis were done with ad-hoc
   scripts (`ps -M` deltas; V8 `ProfileChunk` events resolved through the symbol
   map and restricted to the CPU thread).
+
+## Rejected follow-up: direct gather-pipe writes
+
+The FIFO write path (about 10% of the CPU thread) was tried next: generated
+stores to the 0xCC008000 page wrote Dolphin's gather pipe directly, with the
+32-byte burst still going through GPFifo and the run loop publishing the pipe
+for its own guest context only. Correctness held (chain and entries oracles,
+plus a unit test of byte order, pointer advance, bursts and context gating),
+but neither variant beat the chained control in six alternating runs with
+thread sampling on the heavy Fountain lineup:
+
+| Variant | Module bytes | Median CPU-thread ms per frame (windows 2–3) | Control |
+| --- | --- | --- | --- |
+| Inline write at every store site | 149,353,614 | 18.96 | 17.15 |
+| Out-of-line write, call in the non-RAM branch | 133,025,289 | 17.07 | 16.32 |
+
+Evidence: `build/independent-{gp,chainctl}-series-{1,2,3}` and
+`build/independent-{gp2,chainctl2}-series-{1,2,3}`. The change was removed.
+During the second series, with the machine cool, the chained control measured
+individual windows of 59.3, 59.8 and 59.4 FPS with p95 of 19.2–19.6 ms, so the
+retained runtime does reach the gate in a good machine state.
