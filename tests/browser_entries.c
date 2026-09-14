@@ -34,12 +34,17 @@ static void fallback(CPUState *c, u32 raw, u32 cia) {
 static void journal(u32 a, u32 size, void *u) {
   record((CPUState *)u, a, 0, 200 + size);
 }
-int main(void) {
+int main(int argc, char **argv) {
+  const unsigned total = sizeof(rows) / sizeof(rows[0]);
+  const unsigned first = argc > 1 ? (unsigned)strtoul(argv[1], NULL, 10) : 0;
+  const unsigned end = argc > 2 ? (unsigned)strtoul(argv[2], NULL, 10) : total;
+  if (first >= end || end > total)
+    return 2;
   unsigned char ra[65536], rb[65536], ea[65536], eb[65536];
   unsigned cases = 0;
-  for (unsigned region = 0; region < sizeof(rows) / sizeof(rows[0]); region++)
+  for (unsigned region = first; region < end; region++)
     for (unsigned entry = 0; entry < 256; entry++)
-      for (unsigned scenario = 0; scenario < 12; scenario++) {
+      for (unsigned scenario = 0; scenario < 14; scenario++) {
         CPUState a = {0}, b;
         for (unsigned i = 0; i < 65536; i++)
           ra[i] = ea[i] = (unsigned char)rnd();
@@ -54,9 +59,9 @@ int main(void) {
         a.ctr = rnd() & 7;
         a.cr = rnd();
         a.xer = rnd();
-        a.msr = scenario == 0 ? 0 : PPC_MSR_FP;
+        a.msr = (scenario == 0 || scenario == 13) ? 0 : PPC_MSR_FP;
         a.hid2 = scenario == 1 ? 0 : PPC_HID2_LSQE;
-        a.fpscr = 0;
+        a.fpscr = scenario == 12 ? rnd() : 0;
         a.downcount = 0;
         a.reserve_valid = (scenario & 1) || scenario == 10;
         a.exception = scenario == 11;
@@ -87,6 +92,7 @@ int main(void) {
         g_mem_write_journal = scenario & 1 ? journal : NULL;
         trace = 0;
         g_mem_write_journal_user = &a;
+        ppc_lazy_fp_set_enabled(scenario != 13);
         ppc_fpscr_updated(&a);
         rows[region].reference(&a);
         u64 expected = trace;

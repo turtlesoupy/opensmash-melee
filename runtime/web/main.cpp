@@ -1,6 +1,8 @@
 #include "moderngekko/runtime.hpp"
 #include "moderngekko/mod_abi.h"
+#include <algorithm>
 #include <cstdio>
+#include <iterator>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -23,6 +25,9 @@ extern "C" EMSCRIPTEN_KEEPALIVE unsigned opensmash_frame_interval(unsigned n) { 
 extern "C" const ModernGekkoModuleDesc* staticrecomp_get_module();
 extern "C" const ModernGekkoModDesc* moderngekko_get_mod();
 extern "C" bool opensmash_skinning(CPUState*);
+// Generated regions chain through this table (tools/chain_browser_chunks.py).
+extern "C" uint64_t* opensmash_chain_hook_bits;
+static uint64_t chain_stop_bits[0x00400000u / 4 / 64];
 
 int main(int argc, char** argv)
 {
@@ -59,6 +64,10 @@ int main(int argc, char** argv)
   for (unsigned i = 0; i < mod->num_patches; ++i) hook_index.add(mod->patches[i].address);
   for (unsigned i = 0; i < mod->num_hooks; ++i) hook_index.add(mod->hooks[i].address);
   hook_index.finish();
+  if (const uint64_t* bits = hook_index.dense_bits()) {
+    std::copy(bits, bits + std::size(chain_stop_bits), chain_stop_bits);
+    opensmash_chain_hook_bits = chain_stop_bits;  // the core adds idle-loop addresses
+  }
   config.module.host_call_user = const_cast<ModernGekkoModDesc*>(mod);
   config.module.host_call = [](CPUState* state, unsigned address, void* user) {
     if (address == 0x8036E83Cu || address == 0x80074048u) return opensmash_skinning(state);
@@ -95,7 +104,7 @@ int main(int argc, char** argv)
   const auto settings = config.user_directory / "Config/Dolphin.ini";
   if (!std::filesystem::exists(settings)) {
     std::ofstream file(settings);
-    file << "[Core]\nCPUThread = False\nEnableCheats = False\n"
+    file << "[Core]\nCPUThread = True\nEnableCheats = False\n"
             "[DSP]\nBackend = Browser\n"
             "[Interface]\nConfirmStop = False\nOnScreenDisplayMessages = False\n";
   }

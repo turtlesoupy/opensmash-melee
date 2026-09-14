@@ -11,6 +11,7 @@ import subprocess
 from prepare_moderngekko import CHECKOUT, ROOT
 from specialize_browser_math import specialize, specialize_scaled, containing_chunk
 from specialize_browser_entries import specialize_entries
+from chain_browser_chunks import chain_chunks
 
 SOURCE = ROOT / 'build/browser-engine/moderngekko-web'
 BUILD = ROOT / 'build/moderngekko-wasm'
@@ -30,6 +31,7 @@ def write_build_identity(dev_link=False, output=None):
         'id': digest[:16], 'wasmSha256': digest, 'wasmBytes': wasm.stat().st_size,
         'cacheId': runtime_digest.hexdigest()[:24],
         'chunkInstructions': 256, 'hotLto': False,
+        'regionChaining': json.loads((ROOT / 'build/browser-engine/melee-wasm-code/generated/opensmash_chain.json').read_text()),
         'linkOptimization': 'O1' if dev_link else 'O3',
         'patchSha256': hashlib.sha256((ROOT / 'runtime/patches/browser/0001-emscripten-runtime.patch').read_bytes()).hexdigest(),
         'patches': {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
@@ -90,6 +92,7 @@ def build(configure_only=False, target='opensmash-web', dev_link=False):
     specialize(generated)
     specialize_scaled(generated)
     specialize_entries(generated)
+    chain_chunks(generated)
     hot_addresses = [0x80341140, 0x80342204, 0x80379A20, 0x8037A54C]
     options.update(OPENSMASH_WASM_LINK_OPT='-O1' if dev_link else '-O3',
                    OPENSMASH_BROWSER_FRONTEND=str(ROOT / 'runtime/web'),

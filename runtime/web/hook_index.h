@@ -10,12 +10,17 @@ class BrowserHookIndex {
   static constexpr uint32_t base = 0x80000000u, size = 0x00400000u;
   std::array<uint64_t, size / 4 / 64> bits{};
   std::vector<uint32_t> addresses;
+  bool dense = true;
 public:
   void add(uint32_t address) {
     addresses.push_back(address);
     const uint32_t offset = address - base;
     if (offset < size && !(offset & 3)) bits[offset / 256] |= uint64_t{1} << ((offset / 4) % 64);
+    else dense = false;
   }
+  // The dense table alone, when it answers contains() for every registered
+  // address; null otherwise so callers fall back to the full lookup.
+  const uint64_t* dense_bits() const { return dense ? bits.data() : nullptr; }
   void finish() {
     std::sort(addresses.begin(), addresses.end());
     addresses.erase(std::unique(addresses.begin(), addresses.end()), addresses.end());

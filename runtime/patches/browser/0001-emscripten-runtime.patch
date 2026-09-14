@@ -985,18 +985,45 @@ diff --git a/vendor/dolphin/Source/Core/Core/DSP/DSPCaptureLogger.h b/vendor/dol
 diff --git a/vendor/dolphin/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Hooks.cpp b/vendor/dolphin/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Hooks.cpp
 --- a/vendor/dolphin/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Hooks.cpp
 +++ b/vendor/dolphin/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Hooks.cpp
-@@ -92,6 +92,11 @@
-     case 4:
-       gpfifo.Write32(static_cast<u32>(value));
+@@ -81,22 +81,34 @@
+     if (core->m_lockstep_verifier->m_ls_journaling)
+       core->m_lockstep_verifier->m_journal.native_mmio.push_back({ea, static_cast<u32>(value), size});
+     auto& gpfifo = core->m_system.GetGPFifo();
++    // Static code already checks interrupts at dispatch boundaries. It needs
++    // the same pipe flush, but not dynamic-JIT FIFO-write profiling/invalidation.
+     switch (size)
+     {
+     case 1:
+-      gpfifo.Write8(static_cast<u8>(value));
++      gpfifo.FastWrite8(static_cast<u8>(value));
++      gpfifo.FastCheckGatherPipe();
        return;
+     case 2:
+-      gpfifo.Write16(static_cast<u16>(value));
++      gpfifo.FastWrite16(static_cast<u16>(value));
++      gpfifo.FastCheckGatherPipe();
+       return;
+     case 4:
+-      gpfifo.Write32(static_cast<u32>(value));
++      gpfifo.FastWrite32(static_cast<u32>(value));
++      gpfifo.FastCheckGatherPipe();
++      return;
 +    case 8:
 +      // Paired-single matrix uploads are one 64-bit gather-pipe store.
 +      // Use the same writer as the MMU instead of checking the pipe eight times.
-+      gpfifo.Write64(value);
-+      return;
++      gpfifo.FastWrite64(value);
++      gpfifo.FastCheckGatherPipe();
+       return;
      default:
        for (u32 i = size * 8u; i > 0;)
        {
+         i -= 8;
+-        gpfifo.Write8(static_cast<u8>(value >> i));
++        gpfifo.FastWrite8(static_cast<u8>(value >> i));
++        gpfifo.FastCheckGatherPipe();
+       }
+       return;
+     }
 diff --git a/vendor/dolphin/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Sync.cpp b/vendor/dolphin/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Sync.cpp
 --- a/vendor/dolphin/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Sync.cpp
 +++ b/vendor/dolphin/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Sync.cpp

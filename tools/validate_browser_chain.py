@@ -1,4 +1,10 @@
-"""Differential-test the actual browser game archive against retained originals."""
+"""Differential-test region chaining in the actual browser game archive.
+
+Each case runs one chained dispatch and, from an identical state, the sequence
+of single-region dispatches the run loop would perform under the same
+continuation rule. Guest CPU state, RAM, EXRAM and the memory/fallback callback
+trace must match exactly.
+"""
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
@@ -16,38 +22,40 @@ def validate(skip_build=False):
     output = ROOT / 'build/moderngekko-validation'
     output.mkdir(parents=True, exist_ok=True)
     archive = BUILD / 'libopensmash-game.a'
-    executable = output / 'browser-entries-test.js'
+    executable = output / 'browser-chain-test.js'
     gx = SOURCE / 'vendor/dolphin/GXRuntime'
     command = [str(EMSDK / 'upstream/emscripten/emcc'), '-O3', '-pthread',
                '-ffp-contract=off', '-fno-fast-math',
                '-I' + str(GENERATED), '-I' + str(gx / 'include'),
-               str(ROOT / 'tests/browser_entries.c'), str(archive),
+               str(ROOT / 'tests/browser_chain.c'), str(archive),
                '-sENVIRONMENT=node', '-sSTACK_SIZE=2097152', '-sINITIAL_MEMORY=134217728', '-o', str(executable)]
     subprocess.run(command, env=os.environ | {'EM_CONFIG': str(EMSDK / '.emscripten')},
                    check=True)
-    specialization = json.loads((GENERATED / 'opensmash_entries.json').read_text())
-    regions = specialization['regions']
-    workers = min(4, regions)
+    chaining = json.loads((GENERATED / 'opensmash_chain.json').read_text())
+    regions = chaining['regions']
+    workers = min(8, regions)
     def check_shard(index):
         first, end = regions * index // workers, regions * (index + 1) // workers
         result = subprocess.run(['node', str(executable), str(first), str(end)],
                                 capture_output=True, text=True)
         if result.returncode:
-            raise RuntimeError(f'Entry regions {first}:{end} failed:\n{result.stderr}\n{result.stdout}')
+            raise RuntimeError(f'Chain regions {first}:{end} failed:\n{result.stderr}\n{result.stdout}')
         data = json.loads(result.stdout)
-        if data['cases'] != (end - first) * 256 * 14:
-            raise RuntimeError(f'Incomplete entry coverage in regions {first}:{end}')
+        if data['cases'] != (end - first) * 4 * 6:
+            raise RuntimeError(f'Incomplete chain coverage in regions {first}:{end}')
         return data
     with ThreadPoolExecutor(max_workers=workers) as pool:
         reports = list(pool.map(check_shard, range(workers)))
-    report = reports[0] | {'cases': sum(r['cases'] for r in reports), 'shards': workers}
-    if not all(r['fullCpu'] and r['ramAndExram'] and r['callbackStateAndOrder'] for r in reports):
-        raise RuntimeError('Missing comparison coverage')
+    report = {'cases': sum(r['cases'] for r in reports),
+              'chainedCases': sum(r['chainedCases'] for r in reports),
+              'longestChain': max(r['longestChain'] for r in reports), 'shards': workers}
+    if report['chainedCases'] == 0:
+        raise RuntimeError('No case exercised a chained transfer')
     with archive.open('rb') as stream:
         report['archiveSha256'] = hashlib.file_digest(stream, 'sha256').hexdigest()
-    report['specialization'] = specialization
+    report['chaining'] = chaining
     text = json.dumps(report, indent=2) + '\n'
-    (output / 'browser-entries-wasm.json').write_text(text)
+    (output / 'browser-chain-wasm.json').write_text(text)
     print(text, end='')
 
 

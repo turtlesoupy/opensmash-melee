@@ -71,7 +71,9 @@ static inline void opensmash_pc_write{width}(CPUState* ctx, u32 ea, {kind} value
 def defer_counter(match, stats):
     address, body = match[1], match[2]
     store = f'    ctx->pc = 0x{address}u;\n'
-    if store not in body:
+    # Only the instruction-entry store is redundant. A self-branch can assign
+    # the same address inside its budget/return path and must retain that write.
+    if not body.startswith(store):
         return match[0]
     code = re.sub(r'//[^\n]*', '', body)
     calls = set(re.findall(r'\b([A-Za-z_]\w*)\s*\(', code))
@@ -80,7 +82,7 @@ def defer_counter(match, stats):
     # A PC read (including a comparison) must see the original materialization.
     if re.search(r'ctx->pc\s*(?!\s*=\s*[^=])', code.replace(store, '')):
         return match[0]
-    changed = body.replace(store, '', 1)
+    changed = body[len(store):]
     for width in (8, 16, 32, 64):
         changed = re.sub(rf'mem_read{width}\(ctx, ea\)',
                          f'opensmash_pc_read{width}(ctx, ea, 0x{address}u)', changed)

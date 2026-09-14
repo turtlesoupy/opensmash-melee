@@ -45,6 +45,9 @@ For ROM-first Apple Silicon app builds, see [NATIVE.md](NATIVE.md).
   pathological Wasm compiler time on large irreducible control-flow graphs.
 - Hot-region entry specialization and deferred guest-PC stores, with original
   entry functions retained as correctness-tested fallbacks.
+- Region chaining: cross-region calls, returns and branches continue directly
+  into the target region under the run loop's own dispatch conditions instead
+  of returning to C++ for every transfer.
 - WebGL 2 renderer with a separate capability-probe canvas; the real canvas moves
   directly to the CPU/GPU worker. Explicit ImageBitmap presentation lets the game
   retain its synchronous loop without blocking the browser UI.
@@ -133,7 +136,11 @@ without a repeated full-disc hash. `MELEE_LINEUP=default` uses Turing, stock Fox
 Lincoln and Obama instead of the mixed Turing/Fox/Link/Peach four-player case.
 `MELEE_TEST_URL` selects another local server. For attribution only,
 `MELEE_TRACE=1` with a URL containing `?benchmark=1&profile=phases` records a CPU
-trace and phase counters; profiled runs cannot certify frame rate.
+trace and phase counters; profiled runs cannot certify frame rate. Without
+`profile=phases`, `MELEE_TRACE=1` records a V8 CPU profile of the normal build
+from launch onward, kept even when the run fails. `MELEE_CHROME_ARGS` passes
+diagnostic Chrome flags (for example `--js-flags=--no-liftoff`); such runs are
+not acceptance evidence.
 
 The browser build produces gzip sidecars at build time. The local server serves
 those to supporting clients with the original MIME type. Runtime URLs carry a
@@ -229,10 +236,10 @@ hot-entry optimization below was evaluated afterward.
 
 ### Hot-entry specialization and deferred PC stores
 
-The normal browser build now specializes 126 profiled regions. Their entry
-switches contain 4,624 common addresses instead of 32,256; all other addresses
-fall back to the original generated functions. Reviewed integer instructions
-also defer 22,951 redundant guest-PC stores. RAM accesses use the same endian,
+The browser build specializes 512 profiled regions. Their entry switches contain
+19,717 common addresses instead of 131,072; all other addresses fall back to the
+original generated functions. Reviewed integer instructions also defer 96,345
+redundant guest-PC stores. RAM accesses use the same endian,
 range and reservation logic; MMIO callbacks materialize the original instruction
 PC first. Exceptions, write journaling and overlapping CPU/RAM storage select
 the original path. Floating-point arithmetic, cycle charges, branch destinations
@@ -249,7 +256,7 @@ python3 tools/validate_browser_entries.py
 python3 tools/build_recomp_browser.py
 ```
 
-The oracle passes 387,072 cases against the actual browser game archive, comparing complete CPU state,
+The oracle passes 1,835,008 cases against the actual browser game archive, comparing complete CPU state,
 RAM/EXRAM, and callback state/order with retained originals at every instruction
 entry in the selected regions. Its report includes the archive hash.
 
@@ -278,7 +285,7 @@ Their private implementation and runtime files were removed; summaries/logs
 remain in `build/wasm-o3/`, `build/wasm-clones/`, `build/wasm-pc-alias/`,
 `build/wasm-uniform/` and `build/wasm-endian/`. These are not build options.
 
-The normal build reproduces candidate `ec8ce7069ed4439a` byte-for-byte (Wasm SHA
+The previous 126-region build reproduced candidate `ec8ce7069ed4439a` byte-for-byte (Wasm SHA
 `ec8ce7069ed4439a361673aca5a1e361fb46fb4d7527b4be99710532b65bff1c`).
 It is 121,159,860 bytes uncompressed and 18,384,658 bytes over gzip, approximately
 2.1% larger uncompressed than the original baseline. Its fresh stock two-player
@@ -295,3 +302,79 @@ not remove the all-stock four-player shortfall. Summary and exact window values:
 `build/wasm-final/summary.json`. Superseded private generated sources and runtimes
 were removed after the normal build reproduced their measured binary; evidence
 and build identities remain.
+
+
+### Broader stock validation and CPU/GPU scheduling
+
+The current follow-up returns from the browser CPU loop after 64 complete timing
+slices, allowing V8 to use newly optimized code on re-entry. A four-stock
+Battlefield run passed three windows at 59.16, 59.93 and 59.94 FPS. Coverage of all
+26 stock fighters across five stages then exposed harder cases, especially
+Fountain of Dreams; this is not yet a general 60 FPS result.
+
+The browser now transfers its canvas to Dolphin's GPU thread and uses separate
+FIFO cache lines plus a static FIFO write path without dynamic-JIT profiling.
+The latest Fountain test improved to 57.63, 59.16 and 59.60 FPS, but still failed
+the first window. Injected Battlefield passed at 59.90, 59.93 and 59.97 FPS.
+See [the detailed measurements and rejected experiments](research/WASM_RUNLOOP_TIERING.md).
+
+Use `MELEE_STOCK_CHARACTERS=5,1,4,13 MELEE_STAGE=2` with
+`MELEE_LINEUP=all-stock` to exercise Fountain with the heavy stock lineup.
+`MELEE_WINDOWS=3 MELEE_STRICT_WINDOWS=1` requires every measured window to pass
+the existing FPS, frame-time and audio gates. No stage or fighter is exempted.
+
+
+For the complete stock sweep (seven four-player matchups, all 26 fighters):
+
+```sh
+NODE_PATH=/path/to/node_modules MELEE_TEST_URL='http://127.0.0.1:5174/?benchmark=1' \
+  python3 tools/validate_wasm_roster.py /path/to/Melee.iso --output build/stock-roster-run
+```
+
+The output directory must be new. Run this without a concurrent build or another
+emulator benchmark. The report retains each runtime identity, individual window,
+and replay result; a single failed case makes the command fail.
+
+
+The full-roster repeat passed five of seven cases on the FIFO runtime. Expanding
+the shader warmup from 96 to 833 portable pipeline descriptions then made the
+Ice Climbers/Peach/Samus/Jigglypuff case pass all three windows at 59.83, 59.42
+and 59.86 FPS. Existing users receive these entries through a merge that keeps
+locally learned pipelines. The descriptions contain no game assets or driver
+binaries. Fountain still fails the strict sustained-performance gate.
+
+`tools/validate_browser_gpu_wakeup.py` checks the browser GPU wakeup protocol.
+The disc harness saves `GALE01.uidcache` alongside timing evidence, and
+`tools/merge_browser_shader_cache.py` can merge complete version-8 captures into
+a warmup JSON file. Temporary Chrome profiles are removed after each test unless
+`MELEE_KEEP_BROWSER_PROFILE=1` is set.
+
+### Region chaining
+
+`tools/chain_browser_chunks.py` runs after entry specialization and writes
+chained copies of every region under `generated/chained/`. A static or dynamic
+region exit calls the target region directly when the run loop would have
+re-dispatched it: same guest context, no pending exception, within the cycles
+left in the CoreTiming slice (capped at the 256-cycle loop budget, with at
+least one cycle charged per transfer), target not a host-call or idle-loop
+address, target region verified and not forced to the interpreter. Chains end
+at the first transfer after the slice expires, the boundary per-region dispatch
+already used, so interrupt delivery points are unchanged. Patch 0005 publishes
+the run loop's state and checks the generated region table against the module.
+
+```sh
+python3 tools/validate_browser_chain.py
+python3 tools/validate_browser_entries.py --skip-build
+```
+
+The chain oracle compares one chained dispatch with the unchained sequence
+under the same rule: 91,032 cases (58,100 chained, longest chain 251) over
+every region. The entries oracle still passes on the chained archive. Alternating
+runs against the frozen `f60b3f3bbd856e7f` control on the heavy Fountain lineup
+measured a median 19.3 ms of CPU-thread time per frame versus 22.7 ms (49.3
+versus 40.9 FPS on an evening machine state where neither passed the strict
+gate). Details, failed variants and evidence paths are in
+[WASM_REGION_CHAINING.md](research/WASM_REGION_CHAINING.md).
+
+For the current cleanup state, exact reproduction commands, acceptance gates and
+known measurement limitations, see the [independent performance handoff](research/WASM_INDEPENDENT_HANDOFF.md).

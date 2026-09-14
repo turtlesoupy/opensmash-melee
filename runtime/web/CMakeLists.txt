@@ -21,6 +21,9 @@ add_custom_command(OUTPUT "${OPENSMASH_MODULE_TABLES}"
     "${OPENSMASH_RECOMPILED_GAME}/generated_smc.txt" "${OPENSMASH_RECOMPILED_GAME}/main.dol")
 file(GLOB OPENSMASH_CHUNKS CONFIGURE_DEPENDS "${OPENSMASH_RECOMPILED_GAME}/chunks/*.c")
 include("${OPENSMASH_RECOMPILED_GAME}/opensmash_entries.cmake")
+# Region chaining rewrites every region (tools/chain_browser_chunks.py); the
+# chained copies replace the generated and entry-specialized sources.
+include("${OPENSMASH_RECOMPILED_GAME}/opensmash_chained.cmake")
 add_library(opensmash-game STATIC
   "${OPENSMASH_DOLPHIN}/module-template/module_export.c"
   "${OPENSMASH_MODULE_TABLES}"
@@ -49,15 +52,17 @@ endif()
 set(OPENSMASH_HOT_ENTRY_CHUNKS)
 foreach(chunk IN LISTS OPENSMASH_HOT_GAME_CHUNKS)
   get_filename_component(chunk_name "${chunk}" NAME)
-  set(entry_chunk "${OPENSMASH_RECOMPILED_GAME}/entries/${chunk_name}")
-  if(EXISTS "${entry_chunk}")
-    list(APPEND OPENSMASH_HOT_ENTRY_CHUNKS "${entry_chunk}")
-  endif()
+  foreach(kind entries chunks)
+    set(chained_chunk "${OPENSMASH_RECOMPILED_GAME}/chained/${kind}/${chunk_name}")
+    if(EXISTS "${chained_chunk}")
+      list(APPEND OPENSMASH_HOT_ENTRY_CHUNKS "${chained_chunk}")
+      break()
+    endif()
+  endforeach()
 endforeach()
 set_source_files_properties(
   "${OPENSMASH_DOLPHIN}/GXRuntime/src/core/cpu.c"
   "${OPENSMASH_DOLPHIN}/GXRuntime/src/core/cpu_interpreter_float.c"
-  ${OPENSMASH_HOT_GAME_CHUNKS}
   ${OPENSMASH_HOT_ENTRY_CHUNKS}
   PROPERTIES COMPILE_OPTIONS "-flto")
 # Inline the hot dispatcher and CPU-state/memory helpers across their C++ files.
@@ -67,6 +72,8 @@ set_source_files_properties(
   "${OPENSMASH_DOLPHIN}/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_SMC.cpp"
   "${OPENSMASH_DOLPHIN}/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Hooks.cpp"
   "${OPENSMASH_DOLPHIN}/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Sync.cpp"
+  "${OPENSMASH_DOLPHIN}/Source/Core/Core/HW/GPFifo.cpp"
+  "${OPENSMASH_DOLPHIN}/Source/Core/Core/HW/Memmap.cpp"
   TARGET_DIRECTORY core PROPERTIES COMPILE_OPTIONS "-flto")
 add_executable(opensmash-web "${OPENSMASH_WEB_SOURCE}/main.cpp" "${OPENSMASH_WEB_SOURCE}/skin_runtime.cpp" "${OPENSMASH_WEB_SOURCE}/verify_image.cpp"
   "${OPENSMASH_WEB_SOURCE}/../mods/launch_match.c")

@@ -210,7 +210,7 @@ self.onmessage = async ({data}) => {
     // Compile known pipelines before the first game frame. The engine validates
     // the portable UID cache version; Chrome compiles it for this user's GPU.
     const shaderCache='/user/Cache/GALE01.uidcache';
-    if(!FS.analyzePath(shaderCache).exists || FS.stat(shaderCache).size<=8) {
+    {
       report('status',{message:'Preparing graphics for your first match…'});
       const response=await fetch('./shader-warmup.json');
       if(!response.ok)throw Error('Could not load graphics preparation data.');
@@ -218,8 +218,13 @@ self.onmessage = async ({data}) => {
       const bytes=Uint8Array.from(atob(seed.data),c=>c.charCodeAt(0));
       const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),x=>x.toString(16).padStart(2,'0')).join('');
       if(seed.version!==1 || digest!==seed.sha256)throw Error('Invalid graphics preparation data.');
-      FS.mkdirTree('/user/Cache');FS.writeFile(shaderCache,bytes);
-      report('shader-warmup',{bytes:bytes.length,sha256:digest});
+      const {mergePipelineCaches}=await import('./shader-warmup.mjs');
+      const existing=FS.analyzePath(shaderCache).exists?FS.readFile(shaderCache):null;
+      const merged=mergePipelineCaches(bytes,existing,seed.uidRecordBytes);
+      if(!existing || existing.length!==merged.length || !existing.every((byte,i)=>merged[i]===byte)) {
+        FS.mkdirTree('/user/Cache');FS.writeFile(shaderCache,merged);
+      }
+      report('shader-warmup',{bytes:merged.length,seedBytes:bytes.length,seedSha256:digest});
     }
 
     FS.mkdir('/sys');

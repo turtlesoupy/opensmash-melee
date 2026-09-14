@@ -16,6 +16,7 @@ __pycache__/
 /web/*.tsbuildinfo
 
 # Local machine state and generated game/runtime artifacts.
+/.claude/
 .DS_Store
 *.app/
 *.dylib
