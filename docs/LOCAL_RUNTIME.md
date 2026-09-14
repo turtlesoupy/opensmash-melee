@@ -263,6 +263,12 @@ The oracle passes 1,835,008 cases against the actual browser game archive, compa
 RAM/EXRAM, and callback state/order with retained originals at every instruction
 entry in the selected regions. Its report includes the archive hash.
 
+The deferral now also covers the 3,281 regions without entry hints (full entry
+switches kept; `generated/deferred/`). Their originals live in a test-only
+`opensmash-game-reference` archive that the oracle links, so the game module
+does not carry them: 101.6 MB versus 129.0 MB. The oracle covers all 3,793
+regions, 13,594,112 cases, about 15 minutes on eight shards.
+
 Private-candidate measurements on the same Apple M5, three 30-second windows:
 
 | Configuration | All-stock four-player FPS |

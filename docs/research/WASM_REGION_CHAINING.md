@@ -270,3 +270,26 @@ deferral-only pass with a test-only reference archive would avoid module
 growth), avoid the 256-way entry switch on chained transfers into function
 starts, and keep guest registers in locals across a region. The FIFO path was
 tried directly and did not pay (above).
+
+## Retained follow-up: deferred PC stores in every region
+
+`tools/specialize_browser_entries.py` now applies the reviewed pure-integer
+PC-store deferral to the 3,281 regions without entry hints as well
+(`generated/deferred/`), keeping their full entry switches. Their retained
+originals go to `generated/references/`, compiled into the test-only
+`opensmash-game-reference` archive that only the oracle links, so the game
+module does not carry them. 771,827 redundant stores are deferred in total; the
+module is 101,557,763 bytes, down from 129,016,825.
+
+`tools/validate_browser_entries.py` now compares all 3,793 regions:
+13,594,112 cases (256 entries × 14 scenarios per region, including write
+journaling and preset exceptions), about 15 minutes on eight shards. The chain
+oracle also passes on the new archive.
+
+Six alternating runs against the chained MEM1-first control
+(`build/independent-{df,chainctl4}-series-{1,2,3}`), windows 2–3: median
+16.10 ms of CPU-thread time per frame versus 16.17, 59.0 versus 59.1 FPS. No
+measurable speed change on Fountain; kept for the smaller module and the
+complete oracle coverage. Fountain windows 2–3 on both builds were 57.2–59.8
+FPS with p95 of 18.1–21.2 ms on this (cool) machine state; first windows were
+57.1–57.9 FPS with p95 21.5–21.9 ms.

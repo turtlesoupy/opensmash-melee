@@ -52,7 +52,7 @@ endif()
 set(OPENSMASH_HOT_ENTRY_CHUNKS)
 foreach(chunk IN LISTS OPENSMASH_HOT_GAME_CHUNKS)
   get_filename_component(chunk_name "${chunk}" NAME)
-  foreach(kind entries chunks)
+  foreach(kind entries deferred chunks)
     set(chained_chunk "${OPENSMASH_RECOMPILED_GAME}/chained/${kind}/${chunk_name}")
     if(EXISTS "${chained_chunk}")
       list(APPEND OPENSMASH_HOT_ENTRY_CHUNKS "${chained_chunk}")
@@ -75,6 +75,13 @@ set_source_files_properties(
   "${OPENSMASH_DOLPHIN}/Source/Core/Core/HW/GPFifo.cpp"
   "${OPENSMASH_DOLPHIN}/Source/Core/Core/HW/Memmap.cpp"
   TARGET_DIRECTORY core PROPERTIES COMPILE_OPTIONS "-flto")
+# Retained originals of the deferred-store regions, for the differential oracle
+# only: the game module does not carry them.
+file(GLOB OPENSMASH_REFERENCES CONFIGURE_DEPENDS "${OPENSMASH_RECOMPILED_GAME}/references/*.c")
+add_library(opensmash-game-reference STATIC EXCLUDE_FROM_ALL ${OPENSMASH_REFERENCES})
+target_include_directories(opensmash-game-reference PRIVATE
+  "${OPENSMASH_RECOMPILED_GAME}" "${OPENSMASH_DOLPHIN}/GXRuntime/include")
+target_compile_options(opensmash-game-reference PRIVATE -O2 -ffp-contract=off -fno-fast-math)
 add_executable(opensmash-web "${OPENSMASH_WEB_SOURCE}/main.cpp" "${OPENSMASH_WEB_SOURCE}/skin_runtime.cpp" "${OPENSMASH_WEB_SOURCE}/verify_image.cpp"
   "${OPENSMASH_WEB_SOURCE}/../mods/launch_match.c")
 target_link_libraries(opensmash-web PRIVATE moderngekko opensmash-game mbedcrypto fmt::fmt)

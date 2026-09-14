@@ -106,7 +106,7 @@ def specialize_entries(generated=GENERATED):
     output.mkdir(exist_ok=True)
     write_changed(generated / 'opensmash_entry_memory.h', memory_helpers())
     manifest, oracle, rows = [], ['#pragma once\n#include "generated.h"\n'], []
-    stats = {'regions': 0, 'fastEntries': 0, 'deferredStores': 0}
+    stats = {'regions': 0, 'fastEntries': 0, 'deferredStores': 0, 'deferredRegions': 0}
     for region in metadata['regions']:
         base = region['base']
         original, = (generated / 'chunks').glob(f'*_{base}.c')
@@ -146,6 +146,8 @@ def specialize_entries(generated=GENERATED):
         rows.append(f'    {{0x{base}u, reference_{base}, func_{base}}},\n')
         stats['regions'] += 1
         stats['fastEntries'] += len(entries)
+    hinted = {region['base'] for region in metadata['regions']}
+    defer_remaining(generated, hinted, oracle, rows, stats)
     oracle += ['static const struct { u32 base; void (*reference)(CPUState*); '
                'void (*fast)(CPUState*); } rows[] = {\n', *rows, '};\n']
     write_changed(generated / 'opensmash_entries.cmake', ''.join(manifest))
@@ -156,3 +158,43 @@ def specialize_entries(generated=GENERATED):
 
 if __name__ == '__main__':
     print(json.dumps(specialize_entries()))
+
+
+def defer_remaining(generated, hinted, oracle, rows, stats):
+    """Defer redundant PC stores in every region without entry hints.
+
+    These regions keep their full entry switch. The original generated function
+    is retained as `reference_<base>` in a separate, test-only archive so the
+    game module does not grow; the differential oracle compares both over the
+    same scenarios (including write journaling and preset exceptions, where the
+    memory helpers materialize the instruction PC before any callback).
+    """
+    output = generated / 'deferred'
+    references = generated / 'references'
+    output.mkdir(exist_ok=True)
+    references.mkdir(exist_ok=True)
+    stale = {path.name for directory in (output, references) for path in directory.glob('*.c')}
+    for original in sorted((generated / 'chunks').glob('*.c')):
+        base = original.stem.rsplit('_', 1)[1]
+        if base in hinted:
+            continue
+        source = original.read_text()
+        start = source.index(f'void func_{base}(CPUState* ctx) {{')
+        fast = source[:start] + re.sub(
+            r'label_([0-9A-F]{8}):\n(.*?)(?=label_[0-9A-F]{8}:\n|\Z)',
+            lambda m: defer_counter(m, stats), source[start:], flags=re.S)
+        if fast == source:
+            continue
+        reference = source.replace(f'func_{base}', f'reference_{base}')
+        reference = re.sub(r'\bloop_([0-9A-F]+)', r'reference_loop_\1', reference)
+        reference = reference.replace('void reference_', '__attribute__((noinline)) void reference_')
+        write_changed(output / original.name,
+                      '#include "../opensmash_entry_memory.h"\n' + fast)
+        write_changed(references / original.name, reference)
+        stale.discard(original.name)
+        oracle.append(f'void reference_{base}(CPUState*);\n')
+        rows.append(f'    {{0x{base}u, reference_{base}, func_{base}}},\n')
+        stats['deferredRegions'] += 1
+    for name in stale:
+        for directory in (output, references):
+            (directory / name).unlink(missing_ok=True)

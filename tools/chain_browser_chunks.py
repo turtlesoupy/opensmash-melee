@@ -231,7 +231,7 @@ def rewrite(source, chunks, stats):
 def chain_chunks(generated=GENERATED):
     chunks = chunk_table(generated)
     output = generated / 'chained'
-    for kind in ('chunks', 'entries'):
+    for kind in ('chunks', 'entries', 'deferred'):
         (output / kind).mkdir(parents=True, exist_ok=True)
     write_changed(generated / 'opensmash_chain.h', chain_header(chunks))
     write_changed(generated / 'opensmash_chain.c', chain_source(chunks))
@@ -239,9 +239,11 @@ def chain_chunks(generated=GENERATED):
              'returnDispatchExits': 0, 'budgetExits': 0, 'unmappedExits': 0}
     manifest = ['set(OPENSMASH_CHUNKS\n', f'  "{(generated / "opensmash_chain.c").as_posix()}"\n']
     entries = {path.name for path in (generated / 'entries').glob('*.c')}
-    stale = {path.name for kind in ('chunks', 'entries') for path in (output / kind).glob('*.c')}
+    deferred = {path.name for path in (generated / 'deferred').glob('*.c')}
+    stale = {path.name for kind in ('chunks', 'entries', 'deferred') for path in (output / kind).glob('*.c')}
     for original in sorted((generated / 'chunks').glob('*.c')):
-        kind = 'entries' if original.name in entries else 'chunks'
+        kind = ('entries' if original.name in entries else
+                'deferred' if original.name in deferred else 'chunks')
         source = (generated / kind / original.name).read_text()
         destination = output / kind / original.name
         write_changed(destination, rewrite(source, chunks, stats))
@@ -249,7 +251,7 @@ def chain_chunks(generated=GENERATED):
         manifest.append(f'  "{destination.as_posix()}"\n')
         stats['files'] += 1
     for name in stale:
-        for kind in ('chunks', 'entries'):
+        for kind in ('chunks', 'entries', 'deferred'):
             (output / kind / name).unlink(missing_ok=True)
     manifest.append(')\n')
     write_changed(generated / 'opensmash_chained.cmake', ''.join(manifest))

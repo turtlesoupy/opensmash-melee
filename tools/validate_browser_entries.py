@@ -13,21 +13,23 @@ from specialize_browser_math import GENERATED
 def validate(skip_build=False):
     if not skip_build:
         build(target='opensmash-game')
+    build(target='opensmash-game-reference')
     output = ROOT / 'build/moderngekko-validation'
     output.mkdir(parents=True, exist_ok=True)
     archive = BUILD / 'libopensmash-game.a'
+    reference = BUILD / 'libopensmash-game-reference.a'
     executable = output / 'browser-entries-test.js'
     gx = SOURCE / 'vendor/dolphin/GXRuntime'
     command = [str(EMSDK / 'upstream/emscripten/emcc'), '-O3', '-pthread',
                '-ffp-contract=off', '-fno-fast-math',
                '-I' + str(GENERATED), '-I' + str(gx / 'include'),
-               str(ROOT / 'tests/browser_entries.c'), str(archive),
+               str(ROOT / 'tests/browser_entries.c'), str(archive), str(reference),
                '-sENVIRONMENT=node', '-sSTACK_SIZE=2097152', '-sINITIAL_MEMORY=134217728', '-o', str(executable)]
     subprocess.run(command, env=os.environ | {'EM_CONFIG': str(EMSDK / '.emscripten')},
                    check=True)
     specialization = json.loads((GENERATED / 'opensmash_entries.json').read_text())
-    regions = specialization['regions']
-    workers = min(4, regions)
+    regions = specialization['regions'] + specialization.get('deferredRegions', 0)
+    workers = min(8, regions)
     def check_shard(index):
         first, end = regions * index // workers, regions * (index + 1) // workers
         result = subprocess.run(['node', str(executable), str(first), str(end)],
